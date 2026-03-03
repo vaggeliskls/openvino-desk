@@ -34,6 +34,7 @@ type Config struct {
 	StartupSet      bool     `json:"startup_set"` // true once the startup preference has been written
 	SearchTags      []string `json:"search_tags"`
 	PipelineFilters []string `json:"pipeline_filters"`
+	SearchLimit     int      `json:"search_limit"`
 }
 
 // StatusResult reports whether each component is ready.
@@ -77,6 +78,7 @@ func defaultConfig() Config {
 		OvmsURL:    defaultOvmsURL,
 		SearchTags:      defaultSearchTags,
 		PipelineFilters: defaultPipelineFilters,
+		SearchLimit:     30,
 	}
 }
 
@@ -102,6 +104,9 @@ func (a *App) loadConfig() {
 	}
 	if len(a.config.PipelineFilters) == 0 {
 		a.config.PipelineFilters = defaultPipelineFilters
+	}
+	if a.config.SearchLimit == 0 {
+		a.config.SearchLimit = 30
 	}
 }
 
@@ -212,8 +217,10 @@ func hfGet(endpoint string) ([]HFModel, error) {
 // Pass an empty slice to search without any pipeline restriction.
 // One request is made per filter and results are merged/deduplicated.
 func (a *App) SearchModels(query string, filters []string) ([]HFModel, error) {
-	base := "https://huggingface.co/api/models?search=" + url.QueryEscape(query) +
-		"&limit=30&sort=downloads&direction=-1"
+	base := fmt.Sprintf("https://huggingface.co/api/models?limit=%d&sort=downloads&direction=-1", a.config.SearchLimit)
+	if query != "" {
+		base += "&search=" + url.QueryEscape(query)
+	}
 	if len(filters) == 0 {
 		return hfGet(base)
 	}

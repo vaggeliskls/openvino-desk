@@ -7,6 +7,7 @@ export namespace main {
 	    startup_set: boolean;
 	    search_tags: string[];
 	    pipeline_filters: string[];
+	    search_limit: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -20,6 +21,7 @@ export namespace main {
 	        this.startup_set = source["startup_set"];
 	        this.search_tags = source["search_tags"];
 	        this.pipeline_filters = source["pipeline_filters"];
+	        this.search_limit = source["search_limit"];
 	    }
 	}
 	export class HFModel {

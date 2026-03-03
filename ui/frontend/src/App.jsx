@@ -13,7 +13,7 @@ function StatusBadge({ ready, label }) {
 
 export default function App() {
   const [tab, setTab] = useState('export')
-  const [config, setConfig] = useState({ install_dir: '', uv_url: '', ovms_url: '', search_tags: [], pipeline_filters: [] })
+  const [config, setConfig] = useState({ install_dir: '', uv_url: '', ovms_url: '', search_tags: [], pipeline_filters: [], search_limit: 30 })
   const [newTag, setNewTag] = useState('')
   const [newFilter, setNewFilter] = useState('')
   const [saved, setSaved] = useState(false)
@@ -76,7 +76,7 @@ export default function App() {
   }
 
   const quickSearch = (tag) => { setSearchQuery(tag); doSearch(tag) }
-  const handleSearch = () => { if (searchQuery.trim()) doSearch(searchQuery.trim()) }
+  const handleSearch = () => { doSearch(searchQuery.trim()) }
 
   const toggleFilter = (f) =>
     setActiveFilters(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])
@@ -113,7 +113,7 @@ export default function App() {
           <div className="panel">
             <div className="status-row">
               <StatusBadge ready={status.uv_ready} label="uv" />
-              <StatusBadge ready={status.deps_ready} label="Dependencies" />
+              <StatusBadge ready={status.deps_ready} label="Export" />
               <StatusBadge ready={status.ovms_ready} label="OVMS" />
               <button className="btn-ghost" onClick={() => CheckStatus().then(setStatus)}>
                 Refresh
@@ -173,7 +173,7 @@ export default function App() {
                   onKeyDown={e => e.key === 'Enter' && handleSearch()}
                   placeholder="Search Hugging Face models…"
                 />
-                <button className="btn-primary" disabled={searching || !searchQuery.trim()} onClick={handleSearch}>
+                <button className="btn-primary" disabled={searching} onClick={handleSearch}>
                   {searching ? 'Searching…' : 'Search'}
                 </button>
               </div>
@@ -250,6 +250,18 @@ export default function App() {
                 />
                 <small>URL to the OVMS zip archive for Windows.</small>
               </div>
+            </div>
+
+            <div className="field">
+              <label>Search Limit</label>
+              <input
+                type="number"
+                min="1"
+                max="200"
+                value={config.search_limit || 30}
+                onChange={e => setConfig(c => ({ ...c, search_limit: parseInt(e.target.value) || 30 }))}
+              />
+              <small>Max number of models returned per search (default 30).</small>
             </div>
 
             <div className="field">
