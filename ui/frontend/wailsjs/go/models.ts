@@ -18,6 +18,26 @@ export namespace main {
 	        this.startup_set = source["startup_set"];
 	    }
 	}
+	export class HFModel {
+	    id: string;
+	    pipeline_tag: string;
+	    downloads: number;
+	    likes: number;
+	    library_name: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new HFModel(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.pipeline_tag = source["pipeline_tag"];
+	        this.downloads = source["downloads"];
+	        this.likes = source["likes"];
+	        this.library_name = source["library_name"];
+	    }
+	}
 	export class StatusResult {
 	    uv_ready: boolean;
 	    deps_ready: boolean;

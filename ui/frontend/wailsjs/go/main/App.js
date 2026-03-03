@@ -6,6 +6,10 @@ export function CheckStatus() {
   return window['go']['main']['App']['CheckStatus']();
 }
 
+export function ExportModel(arg1) {
+  return window['go']['main']['App']['ExportModel'](arg1);
+}
+
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
@@ -22,8 +26,16 @@ export function PrepareOVMS() {
   return window['go']['main']['App']['PrepareOVMS']();
 }
 
+export function PullModel(arg1) {
+  return window['go']['main']['App']['PullModel'](arg1);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
+}
+
+export function SearchModels(arg1) {
+  return window['go']['main']['App']['SearchModels'](arg1);
 }
 
 export function SetStartup(arg1) {

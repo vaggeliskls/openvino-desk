@@ -94,6 +94,11 @@ func extractZip(zipPath, destDir string, log LogFunc) error {
 	return nil
 }
 
+// RunScript runs an arbitrary command in workDir, streaming output via log.
+func RunScript(workDir string, log LogFunc, name string, args ...string) error {
+	return runCmd(workDir, log, name, args...)
+}
+
 func streamLines(r io.Reader, log LogFunc, wg *sync.WaitGroup) {
 	defer wg.Done()
 	buf := make([]byte, 4096)

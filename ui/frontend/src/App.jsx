@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { GetConfig, SaveConfig, PrepareExport, PrepareOVMS, CheckStatus, GetStartupEnabled, SetStartup } from '../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, PrepareExport, PrepareOVMS, CheckStatus, GetStartupEnabled, SetStartup, SearchModels, ExportModel, PullModel } from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 
 function StatusBadge({ ready, label }) {
@@ -20,6 +20,12 @@ export default function App() {
   const [logs, setLogs] = useState([])
   const [running, setRunning] = useState(false)
   const [error, setError] = useState(null)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState([])
+  const [searching, setSearching] = useState(false)
+  const [selectedModel, setSelectedModel] = useState('')
+
   const logsEndRef = useRef(null)
 
   useEffect(() => {
@@ -51,6 +57,21 @@ export default function App() {
       .catch(err => setError(String(err)))
       .finally(() => setRunning(false))
   }
+
+  const handleSearch = () => {
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    setSearchResults([])
+    setSelectedModel('')
+    SearchModels(searchQuery.trim())
+      .then(results => setSearchResults(results || []))
+      .catch(err => setError(String(err)))
+      .finally(() => setSearching(false))
+  }
+
+  const selectedModelInfo = searchResults.find(m => m.id === selectedModel)
+  const isSelectedOV = selectedModelInfo?.library_name === 'openvino' ||
+    selectedModel.toLowerCase().startsWith('openvino/')
 
   return (
     <div className="app">
@@ -107,6 +128,45 @@ export default function App() {
                   {running ? 'Running…' : 'Prepare OVMS'}
                 </button>
               </div>
+            </div>
+
+            <div className="search-section">
+              <h3>Export Model from Hugging Face</h3>
+              <div className="search-row">
+                <input
+                  className="search-input"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  placeholder="Search Hugging Face models…"
+                />
+                <button className="btn-primary" disabled={searching || !searchQuery.trim()} onClick={handleSearch}>
+                  {searching ? 'Searching…' : 'Search'}
+                </button>
+              </div>
+
+              {searchResults.length > 0 && (
+                <div className="search-results">
+                  <select
+                    size={Math.min(searchResults.length, 8)}
+                    value={selectedModel}
+                    onChange={e => setSelectedModel(e.target.value)}
+                  >
+                    {searchResults.map(m => (
+                      <option key={m.id} value={m.id}>
+                        {m.id}{m.pipeline_tag ? ` · ${m.pipeline_tag}` : ''} · ↓{m.downloads.toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-primary"
+                    disabled={running || !selectedModel}
+                    onClick={() => run(() => isSelectedOV ? PullModel(selectedModel) : ExportModel(selectedModel))}
+                  >
+                    {running ? 'Running…' : isSelectedOV ? `Pull ${selectedModel || '…'}` : `Export ${selectedModel || '…'}`}
+                  </button>
+                </div>
+              )}
             </div>
 
             {(logs.length > 0 || error) && (

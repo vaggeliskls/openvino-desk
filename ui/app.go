@@ -6,6 +6,8 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -166,6 +168,68 @@ func (a *App) PrepareExport() error {
 		return fmt.Errorf("extract assets: %w", err)
 	}
 	return setup.PrepareExport(a.config.InstallDir, a.config.UvURL, a.emit)
+}
+
+// HFModel is a minimal representation of a Hugging Face model search result.
+type HFModel struct {
+	ID          string `json:"id"`
+	PipelineTag string `json:"pipeline_tag"`
+	Downloads   int    `json:"downloads"`
+	Likes       int    `json:"likes"`
+	LibraryName string `json:"library_name"`
+}
+
+func hfGet(endpoint string) ([]HFModel, error) {
+	resp, err := http.Get(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("huggingface request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("huggingface API: HTTP %d", resp.StatusCode)
+	}
+	var models []HFModel
+	if err := json.NewDecoder(resp.Body).Decode(&models); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return models, nil
+}
+
+// SearchModels queries the Hugging Face API and returns matching models.
+func (a *App) SearchModels(query string) ([]HFModel, error) {
+	return hfGet("https://huggingface.co/api/models?search=" + url.QueryEscape(query) +
+		"&limit=30&sort=downloads&direction=-1")
+}
+
+
+// PullModel downloads an OpenVINO model from Hugging Face using huggingface_hub.
+func (a *App) PullModel(modelID string) error {
+	if a.config.InstallDir == "" {
+		return fmt.Errorf("install directory is not configured")
+	}
+	if modelID == "" {
+		return fmt.Errorf("no model selected")
+	}
+	venvPython := filepath.Join(a.config.InstallDir, "export", "Scripts", "python.exe")
+	destDir := filepath.Join(a.config.InstallDir, "models", modelID)
+	script := fmt.Sprintf(
+		"from huggingface_hub import snapshot_download; snapshot_download(%q, local_dir=%q)",
+		modelID, destDir,
+	)
+	return setup.RunScript(a.config.InstallDir, a.emit, venvPython, "-c", script)
+}
+
+// ExportModel runs export_model.py with the given Hugging Face model ID.
+func (a *App) ExportModel(modelID string) error {
+	if a.config.InstallDir == "" {
+		return fmt.Errorf("install directory is not configured")
+	}
+	if modelID == "" {
+		return fmt.Errorf("no model selected")
+	}
+	venvPython := filepath.Join(a.config.InstallDir, "export", "Scripts", "python.exe")
+	scriptPath := filepath.Join(a.config.InstallDir, "export-model-requirements", "export_model.py")
+	return setup.RunScript(a.config.InstallDir, a.emit, venvPython, scriptPath, "--model_id", modelID)
 }
 
 // PrepareOVMS downloads and extracts the OVMS server.
