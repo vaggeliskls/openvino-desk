@@ -2,6 +2,9 @@ export namespace main {
 	
 	export class Config {
 	    install_dir: string;
+	    uv_url: string;
+	    ovms_url: string;
+	    startup_set: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -10,6 +13,25 @@ export namespace main {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.install_dir = source["install_dir"];
+	        this.uv_url = source["uv_url"];
+	        this.ovms_url = source["ovms_url"];
+	        this.startup_set = source["startup_set"];
+	    }
+	}
+	export class StatusResult {
+	    uv_ready: boolean;
+	    deps_ready: boolean;
+	    ovms_ready: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new StatusResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.uv_ready = source["uv_ready"];
+	        this.deps_ready = source["deps_ready"];
+	        this.ovms_ready = source["ovms_ready"];
 	    }
 	}
 

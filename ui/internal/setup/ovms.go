@@ -7,14 +7,13 @@ import (
 )
 
 const (
-	ovmsURL    = "https://github.com/openvinotoolkit/model_server/releases/download/v2026.0/ovms_windows_python_on.zip"
 	ovmsTmpZip = "ovms-tmp.zip"
 	ovmsDir    = "ovms"
 )
 
 // PrepareOVMS downloads and extracts the OVMS server into installDir.
-// The zip already contains an ovms/ folder internally.
-func PrepareOVMS(installDir string, log LogFunc) error {
+// ovmsURL is the download URL for the OVMS zip archive.
+func PrepareOVMS(installDir, ovmsURL string, log LogFunc) error {
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		return fmt.Errorf("create install dir: %w", err)
 	}

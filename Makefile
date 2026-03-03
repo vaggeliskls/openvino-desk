@@ -42,13 +42,12 @@ openvino:
 build-cli:
 	cd cli && go build -o ..\openvino-cli.exe .
 
-# Populate ui/assets/ with uv.exe and export scripts (required before ui-dev or ui-build)
+# Populate ui/assets/ with export scripts (uv is downloaded at runtime, not embedded)
 ui-assets:
-	-mkdir ui\assets
-	-mkdir ui\assets\export-model-requirements
-	if not exist ui\assets\uv.exe curl -L https://github.com/astral-sh/uv/releases/download/$(UV_VERSION)/uv-x86_64-pc-windows-msvc.zip -o uv-tmp.zip && tar -xf uv-tmp.zip uv.exe && move uv.exe ui\assets\uv.exe && del uv-tmp.zip
-	copy export-model-requirements\requirements.txt ui\assets\export-model-requirements\requirements.txt
-	copy export-model-requirements\export_model.py ui\assets\export-model-requirements\export_model.py
+	mkdir -p ui/assets/export-model-requirements
+	cp export-model-requirements/requirements.txt ui/assets/export-model-requirements/requirements.txt
+	cp export-model-requirements/export_model.py ui/assets/export-model-requirements/export_model.py
+	cp openvino.png ui/build/appicon.png
 
 ui-dev: ui-assets
 	cd ui && wails dev

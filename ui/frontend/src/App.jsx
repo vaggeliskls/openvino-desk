@@ -1,10 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
-import { GetConfig, SaveConfig, PrepareExport, PrepareOVMS } from '../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, PrepareExport, PrepareOVMS, CheckStatus, GetStartupEnabled, SetStartup } from '../wailsjs/go/main/App'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 
+function StatusBadge({ ready, label }) {
+  return (
+    <div className={`status-badge ${ready ? 'ready' : 'missing'}`}>
+      <span className="status-dot" />
+      {label}
+    </div>
+  )
+}
+
 export default function App() {
-  const [config, setConfig] = useState({ install_dir: '' })
+  const [tab, setTab] = useState('export')
+  const [config, setConfig] = useState({ install_dir: '', uv_url: '', ovms_url: '' })
   const [saved, setSaved] = useState(false)
+  const [startup, setStartup] = useState(false)
+  const [status, setStatus] = useState({ uv_ready: false, deps_ready: false, ovms_ready: false })
   const [logs, setLogs] = useState([])
   const [running, setRunning] = useState(false)
   const [error, setError] = useState(null)
@@ -12,6 +24,8 @@ export default function App() {
 
   useEffect(() => {
     GetConfig().then(setConfig)
+    CheckStatus().then(setStatus)
+    GetStartupEnabled().then(setStartup)
     EventsOn('log', (line) => setLogs(prev => [...prev, line]))
   }, [])
 
@@ -30,76 +44,142 @@ export default function App() {
     setError(null)
     setRunning(true)
     action()
-      .then(() => setLogs(prev => [...prev, '--- Done ---']))
+      .then(() => {
+        setLogs(prev => [...prev, '--- Done ---'])
+        CheckStatus().then(setStatus)
+      })
       .catch(err => setError(String(err)))
       .finally(() => setRunning(false))
   }
 
   return (
     <div className="app">
-      <h1>OpenVINO Desk</h1>
-
-      <section className="config-section">
-        <h2>Configuration</h2>
-
-        <div className="field">
-          <label>Install Directory</label>
-          <input
-            value={config.install_dir}
-            onChange={e => setConfig(c => ({ ...c, install_dir: e.target.value }))}
-            placeholder="e.g. C:\Users\user\openvino-desk"
-          />
-          <small>Base directory where Python, venv and OVMS will be installed.</small>
-        </div>
-
-        <button onClick={handleSave} className="btn-save">
-          {saved ? 'Saved!' : 'Save Configuration'}
-        </button>
-      </section>
-
-      <section className="actions-section">
-        <h2>Setup</h2>
-        <div className="actions">
-          <div className="action-card">
-            <h3>Export Environment</h3>
-            <p>Extracts bundled uv, installs Python 3.12, creates a virtual environment and installs all ML requirements.</p>
+      <header className="app-header">
+        <span className="app-title">OpenVINO Desktop</span>
+        <nav className="tabs">
+          {['models', 'export', 'settings'].map(t => (
             <button
-              className="btn-primary"
-              disabled={running}
-              onClick={() => run(PrepareExport)}
+              key={t}
+              className={`tab ${tab === t ? 'active' : ''}`}
+              onClick={() => setTab(t)}
             >
-              {running ? 'Running...' : 'Prepare Export'}
+              {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
-          </div>
+          ))}
+        </nav>
+      </header>
 
-          <div className="action-card">
-            <h3>OVMS Server</h3>
-            <p>Downloads and extracts the OpenVINO Model Server for Windows.</p>
-            <button
-              className="btn-primary"
-              disabled={running}
-              onClick={() => run(PrepareOVMS)}
-            >
-              {running ? 'Running...' : 'Prepare OVMS'}
-            </button>
+      <main className="tab-content">
+        {tab === 'models' && (
+          <div className="panel">
+            <p className="empty-state">No models configured yet.</p>
           </div>
-        </div>
-      </section>
+        )}
 
-      {(logs.length > 0 || error) && (
-        <section className="log-section">
-          <h2>Output</h2>
-          {error && <div className="error">{error}</div>}
-          <div className="log-box">
-            {logs.map((line, i) => (
-              <div key={i} className={line.startsWith('---') ? 'log-done' : 'log-line'}>
-                {line}
+        {tab === 'export' && (
+          <div className="panel">
+            <div className="status-row">
+              <StatusBadge ready={status.uv_ready} label="uv" />
+              <StatusBadge ready={status.deps_ready} label="Dependencies" />
+              <StatusBadge ready={status.ovms_ready} label="OVMS" />
+              <button className="btn-ghost" onClick={() => CheckStatus().then(setStatus)}>
+                Refresh
+              </button>
+            </div>
+
+            <div className="action-grid">
+              <div className="action-card">
+                <div className="action-card-body">
+                  <h3>Export Environment</h3>
+                  <p>Downloads uv, installs Python 3.12, creates a virtual environment and installs ML requirements.</p>
+                </div>
+                <button className="btn-primary" disabled={running} onClick={() => run(PrepareExport)}>
+                  {running ? 'Running…' : 'Prepare Export'}
+                </button>
               </div>
-            ))}
-            <div ref={logsEndRef} />
+
+              <div className="action-card">
+                <div className="action-card-body">
+                  <h3>OVMS Server</h3>
+                  <p>Downloads and extracts the OpenVINO Model Server for Windows.</p>
+                </div>
+                <button className="btn-primary" disabled={running} onClick={() => run(PrepareOVMS)}>
+                  {running ? 'Running…' : 'Prepare OVMS'}
+                </button>
+              </div>
+            </div>
+
+            {(logs.length > 0 || error) && (
+              <div className="log-section">
+                {error && <div className="error">{error}</div>}
+                <div className="log-box">
+                  {logs.map((line, i) => (
+                    <div key={i} className={line.startsWith('---') ? 'log-done' : 'log-line'}>
+                      {line}
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </div>
+              </div>
+            )}
           </div>
-        </section>
-      )}
+        )}
+
+        {tab === 'settings' && (
+          <div className="panel">
+            <div className="fields">
+              <div className="field">
+                <label>Setup Folder</label>
+                <input
+                  value={config.install_dir}
+                  onChange={e => setConfig(c => ({ ...c, install_dir: e.target.value }))}
+                  placeholder="e.g. C:\Users\user\openvino-desk"
+                />
+                <small>Base directory where Python, venv and OVMS will be installed.</small>
+              </div>
+
+              <div className="field">
+                <label>uv Download URL</label>
+                <input
+                  value={config.uv_url}
+                  onChange={e => setConfig(c => ({ ...c, uv_url: e.target.value }))}
+                  placeholder="https://github.com/astral-sh/uv/releases/download/…/uv-x86_64-pc-windows-msvc.zip"
+                />
+                <small>URL to the uv zip archive for Windows (x86_64).</small>
+              </div>
+
+              <div className="field">
+                <label>OVMS Download URL</label>
+                <input
+                  value={config.ovms_url}
+                  onChange={e => setConfig(c => ({ ...c, ovms_url: e.target.value }))}
+                  placeholder="https://github.com/openvinotoolkit/model_server/releases/download/…/ovms_windows_python_on.zip"
+                />
+                <small>URL to the OVMS zip archive for Windows.</small>
+              </div>
+            </div>
+
+            <label className="toggle-row">
+              <span className="toggle-label">
+                Run on startup
+                <small>Launch automatically when Windows starts.</small>
+              </span>
+              <input
+                type="checkbox"
+                checked={startup}
+                onChange={e => {
+                  const next = e.target.checked
+                  SetStartup(next).then(() => setStartup(next))
+                }}
+              />
+            </label>
+
+            <button className="btn-save" onClick={handleSave}>
+              {saved ? 'Saved!' : 'Save Settings'}
+            </button>
+          </div>
+        )}
+      </main>
     </div>
   )
 }

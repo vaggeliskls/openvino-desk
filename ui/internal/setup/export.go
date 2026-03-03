@@ -10,17 +10,33 @@ import (
 
 const pythonVer = "3.12.12"
 
-// PrepareExport installs Python, creates a venv and installs requirements.
+// PrepareExport downloads uv if needed, installs Python, creates a venv and installs requirements.
 // installDir is the base directory (e.g. C:\Users\user\openvino-desk).
-// uv.exe and requirements.txt are expected to already be present in installDir
-// (extracted from embedded assets by the caller).
-func PrepareExport(installDir string, log LogFunc) error {
+// uvURL is the download URL for the uv zip archive (contains uv.exe).
+func PrepareExport(installDir, uvURL string, log LogFunc) error {
 	if err := os.MkdirAll(installDir, 0755); err != nil {
 		return fmt.Errorf("create install dir: %w", err)
 	}
 
 	uvBin := filepath.Join(installDir, "uv.exe")
 	requirementsFile := filepath.Join(installDir, "export-model-requirements", "requirements.txt")
+
+	// Step 0: Download uv if not present
+	if _, err := os.Stat(uvBin); os.IsNotExist(err) {
+		log("Downloading uv...")
+		tmpZip := filepath.Join(installDir, "uv-tmp.zip")
+		if err := downloadFile(uvURL, tmpZip); err != nil {
+			return fmt.Errorf("download uv: %w", err)
+		}
+		if err := extractFileFromZip(tmpZip, "uv.exe", uvBin); err != nil {
+			os.Remove(tmpZip)
+			return fmt.Errorf("extract uv.exe: %w", err)
+		}
+		os.Remove(tmpZip)
+		log("uv ready.")
+	} else {
+		log("uv already present, skipping download.")
+	}
 
 	// Step 1: Install Python
 	pythonExe := filepath.Join(installDir, "python", "cpython-"+pythonVer+"-windows-x86_64-none", "python.exe")

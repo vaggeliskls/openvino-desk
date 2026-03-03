@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"embed"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
@@ -15,16 +17,22 @@ func main() {
 	app := NewApp()
 
 	err := wails.Run(&options.App{
-		Title:  "OpenVINO Desk",
+		Title:  "OpenVINO",
 		Width:  900,
 		Height: 650,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		OnStartup: app.startup,
-		Bind: []interface{}{
-			app,
+		OnStartup: func(ctx context.Context) {
+			app.startup(ctx)
+			go startTray(ctx)
 		},
+		// Hide the window instead of quitting when the user clicks the close button.
+		OnBeforeClose: func(ctx context.Context) bool {
+			runtime.WindowHide(ctx)
+			return true // true = cancel the close event
+		},
+		Bind: []interface{}{app},
 	})
 	if err != nil {
 		println("Error:", err.Error())
