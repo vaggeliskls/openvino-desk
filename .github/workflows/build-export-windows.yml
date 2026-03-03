@@ -18,11 +18,25 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v4
 
-      - name: Create virtual environment
-        run: uv venv export --python 3.12
+      - name: Install Python 3.12 via uv
+        run: uv python install 3.12
+
+      - name: Get Python installation path
+        id: pypath
+        shell: pwsh
+        run: |
+          $pyExe = (uv python find 3.12)
+          $pyDir = Split-Path $pyExe -Parent
+          Add-Content $env:GITHUB_OUTPUT "dir=$pyDir"
+
+      - name: Copy Python installation into export folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path export -Force | Out-Null
+          Copy-Item -Path "${{ steps.pypath.outputs.dir }}\*" -Destination "export\" -Recurse -Force
 
       - name: Install dependencies
-        run: uv pip install --python export\Scripts\python.exe -r export-model\requirements.txt
+        run: uv pip install --python export\python.exe -r export-model\requirements.txt
 
       - name: Zip export folder
         run: Compress-Archive -Path export -DestinationPath export-windows.zip
