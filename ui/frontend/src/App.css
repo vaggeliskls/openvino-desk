@@ -461,6 +461,29 @@ body {
   gap: 8px;
 }
 
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-hf-link {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #f0a500;
+  background: rgba(240, 165, 0, 0.12);
+  color: #f0c040;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-hf-link:hover {
+  background: rgba(240, 165, 0, 0.25);
+  color: #ffd970;
+}
+
 .search-results select {
   width: 100%;
   background: #111;

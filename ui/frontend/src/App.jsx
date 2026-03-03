@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { GetConfig, SaveConfig, PrepareExport, PrepareOVMS, CheckStatus, GetStartupEnabled, SetStartup, SearchModels, ExportModel, PullModel } from '../wailsjs/go/main/App'
-import { EventsOn } from '../wailsjs/runtime/runtime'
+import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
 function StatusBadge({ ready, label }) {
   return (
@@ -69,7 +69,7 @@ export default function App() {
       .then(results => {
         const list = results || []
         setSearchResults(list)
-        if (list.length === 1) setSelectedModel(list[0].id)
+        if (list.length > 0) setSelectedModel(list[0].id)
       })
       .catch(err => setError(String(err)))
       .finally(() => setSearching(false))
@@ -191,13 +191,23 @@ export default function App() {
                       </option>
                     ))}
                   </select>
-                  <button
-                    className="btn-primary"
-                    disabled={running || !selectedModel}
-                    onClick={() => run(() => isSelectedOV ? PullModel(selectedModel) : ExportModel(selectedModel))}
-                  >
-                    {running ? 'Running…' : isSelectedOV ? `Pull ${selectedModel || '…'}` : `Export ${selectedModel || '…'}`}
-                  </button>
+                  <div className="search-actions">
+                    <button
+                      className="btn-primary"
+                      disabled={running || !selectedModel}
+                      onClick={() => run(() => isSelectedOV ? PullModel(selectedModel) : ExportModel(selectedModel))}
+                    >
+                      {running ? 'Running…' : isSelectedOV ? `Pull ${selectedModel || '…'}` : `Export ${selectedModel || '…'}`}
+                    </button>
+                    {selectedModel && (
+                      <button
+                        className="btn-hf-link"
+                        onClick={() => BrowserOpenURL(`https://huggingface.co/${selectedModel}`)}
+                      >
+                        🤗 View on Hugging Face ↗
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
