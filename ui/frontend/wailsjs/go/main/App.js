@@ -34,8 +34,8 @@ export function SaveConfig(arg1) {
   return window['go']['main']['App']['SaveConfig'](arg1);
 }
 
-export function SearchModels(arg1) {
-  return window['go']['main']['App']['SearchModels'](arg1);
+export function SearchModels(arg1, arg2) {
+  return window['go']['main']['App']['SearchModels'](arg1, arg2);
 }
 
 export function SetStartup(arg1) {

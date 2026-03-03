@@ -24,11 +24,16 @@ const (
 )
 
 // Config holds user-configurable settings.
+var defaultSearchTags = []string{"OpenVINO", "Qwen", "Embedding"}
+var defaultPipelineFilters = []string{"text-generation", "feature-extraction"}
+
 type Config struct {
-	InstallDir string `json:"install_dir"`
-	UvURL      string `json:"uv_url"`
-	OvmsURL    string `json:"ovms_url"`
-	StartupSet bool   `json:"startup_set"` // true once the startup preference has been written
+	InstallDir      string   `json:"install_dir"`
+	UvURL           string   `json:"uv_url"`
+	OvmsURL         string   `json:"ovms_url"`
+	StartupSet      bool     `json:"startup_set"` // true once the startup preference has been written
+	SearchTags      []string `json:"search_tags"`
+	PipelineFilters []string `json:"pipeline_filters"`
 }
 
 // StatusResult reports whether each component is ready.
@@ -70,6 +75,8 @@ func defaultConfig() Config {
 		InstallDir: filepath.Join(home, "openvino-desk"),
 		UvURL:      defaultUvURL,
 		OvmsURL:    defaultOvmsURL,
+		SearchTags:      defaultSearchTags,
+		PipelineFilters: defaultPipelineFilters,
 	}
 }
 
@@ -89,6 +96,12 @@ func (a *App) loadConfig() {
 	}
 	if a.config.OvmsURL == "" {
 		a.config.OvmsURL = defaultOvmsURL
+	}
+	if len(a.config.SearchTags) == 0 {
+		a.config.SearchTags = defaultSearchTags
+	}
+	if len(a.config.PipelineFilters) == 0 {
+		a.config.PipelineFilters = defaultPipelineFilters
 	}
 }
 
@@ -195,10 +208,30 @@ func hfGet(endpoint string) ([]HFModel, error) {
 	return models, nil
 }
 
-// SearchModels queries the Hugging Face API and returns matching models.
-func (a *App) SearchModels(query string) ([]HFModel, error) {
-	return hfGet("https://huggingface.co/api/models?search=" + url.QueryEscape(query) +
-		"&limit=30&sort=downloads&direction=-1")
+// SearchModels queries the Hugging Face API with the given pipeline filters.
+// Pass an empty slice to search without any pipeline restriction.
+// One request is made per filter and results are merged/deduplicated.
+func (a *App) SearchModels(query string, filters []string) ([]HFModel, error) {
+	base := "https://huggingface.co/api/models?search=" + url.QueryEscape(query) +
+		"&limit=30&sort=downloads&direction=-1"
+	if len(filters) == 0 {
+		return hfGet(base)
+	}
+	seen := map[string]bool{}
+	var merged []HFModel
+	for _, f := range filters {
+		results, err := hfGet(base + "&pipeline_tag=" + url.QueryEscape(f))
+		if err != nil {
+			return nil, err
+		}
+		for _, m := range results {
+			if !seen[m.ID] {
+				seen[m.ID] = true
+				merged = append(merged, m)
+			}
+		}
+	}
+	return merged, nil
 }
 
 

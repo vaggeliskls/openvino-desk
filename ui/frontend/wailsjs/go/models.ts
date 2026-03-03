@@ -5,6 +5,8 @@ export namespace main {
 	    uv_url: string;
 	    ovms_url: string;
 	    startup_set: boolean;
+	    search_tags: string[];
+	    pipeline_filters: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -16,6 +18,8 @@ export namespace main {
 	        this.uv_url = source["uv_url"];
 	        this.ovms_url = source["ovms_url"];
 	        this.startup_set = source["startup_set"];
+	        this.search_tags = source["search_tags"];
+	        this.pipeline_filters = source["pipeline_filters"];
 	    }
 	}
 	export class HFModel {

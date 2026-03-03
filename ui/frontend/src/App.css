@@ -337,6 +337,103 @@ body {
   color: #fff;
 }
 
+.filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.filter-chip {
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid #444;
+  background: #1e1e1e;
+  color: #888;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.filter-chip.active {
+  background: #1a3a5c;
+  border-color: #4a90d9;
+  color: #a8d4ff;
+}
+
+.filter-chip:hover {
+  border-color: #666;
+  color: #ccc;
+}
+
+.search-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.search-tag {
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid #444;
+  background: #2a2a2a;
+  color: #ccc;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.search-tag:hover {
+  background: #3a3a3a;
+  color: #fff;
+  border-color: #666;
+}
+
+.tag-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 8px;
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
+}
+
+.tag-pill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #2a2a2a;
+  border: 1px solid #444;
+  color: #ccc;
+  font-size: 0.8rem;
+}
+
+.tag-pill button {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  font-size: 0.9rem;
+}
+
+.tag-pill button:hover {
+  color: #fff;
+}
+
+.tag-input {
+  background: none;
+  border: none;
+  outline: none;
+  color: #ccc;
+  font-size: 0.85rem;
+  min-width: 80px;
+}
+
 .search-row {
   display: flex;
   gap: 8px;

@@ -18,6 +18,6 @@ export function PullModel(arg1:string):Promise<void>;
 
 export function SaveConfig(arg1:main.Config):Promise<void>;
 
-export function SearchModels(arg1:string):Promise<Array<main.HFModel>>;
+export function SearchModels(arg1:string,arg2:Array<string>):Promise<Array<main.HFModel>>;
 
 export function SetStartup(arg1:boolean):Promise<void>;

@@ -13,7 +13,9 @@ function StatusBadge({ ready, label }) {
 
 export default function App() {
   const [tab, setTab] = useState('export')
-  const [config, setConfig] = useState({ install_dir: '', uv_url: '', ovms_url: '' })
+  const [config, setConfig] = useState({ install_dir: '', uv_url: '', ovms_url: '', search_tags: [], pipeline_filters: [] })
+  const [newTag, setNewTag] = useState('')
+  const [newFilter, setNewFilter] = useState('')
   const [saved, setSaved] = useState(false)
   const [startup, setStartup] = useState(false)
   const [status, setStatus] = useState({ uv_ready: false, deps_ready: false, ovms_ready: false })
@@ -25,11 +27,12 @@ export default function App() {
   const [searchResults, setSearchResults] = useState([])
   const [searching, setSearching] = useState(false)
   const [selectedModel, setSelectedModel] = useState('')
+  const [activeFilters, setActiveFilters] = useState(null) // null = not yet initialised
 
   const logsEndRef = useRef(null)
 
   useEffect(() => {
-    GetConfig().then(setConfig)
+    GetConfig().then(cfg => { setConfig(cfg); setActiveFilters(cfg.pipeline_filters || []) })
     CheckStatus().then(setStatus)
     GetStartupEnabled().then(setStartup)
     EventsOn('log', (line) => setLogs(prev => [...prev, line]))
@@ -58,16 +61,21 @@ export default function App() {
       .finally(() => setRunning(false))
   }
 
-  const handleSearch = () => {
-    if (!searchQuery.trim()) return
+  const doSearch = (query) => {
     setSearching(true)
     setSearchResults([])
     setSelectedModel('')
-    SearchModels(searchQuery.trim())
+    SearchModels(query, activeFilters || [])
       .then(results => setSearchResults(results || []))
       .catch(err => setError(String(err)))
       .finally(() => setSearching(false))
   }
+
+  const quickSearch = (tag) => { setSearchQuery(tag); doSearch(tag) }
+  const handleSearch = () => { if (searchQuery.trim()) doSearch(searchQuery.trim()) }
+
+  const toggleFilter = (f) =>
+    setActiveFilters(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])
 
   const selectedModelInfo = searchResults.find(m => m.id === selectedModel)
   const isSelectedOV = selectedModelInfo?.library_name === 'openvino' ||
@@ -132,6 +140,27 @@ export default function App() {
 
             <div className="search-section">
               <h3>Export Model from Hugging Face</h3>
+              <div className="search-tags">
+                {(config.search_tags || []).map(tag => (
+                  <button key={tag} className="search-tag" onClick={() => quickSearch(tag)}>{tag}</button>
+                ))}
+              </div>
+              {(config.pipeline_filters || []).length > 0 && (
+                <div className="filter-chips">
+                  {(config.pipeline_filters || []).map(f => {
+                    const active = (activeFilters || []).includes(f)
+                    return (
+                      <button
+                        key={f}
+                        className={`filter-chip ${active ? 'active' : ''}`}
+                        onClick={() => toggleFilter(f)}
+                      >
+                        {f}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
               <div className="search-row">
                 <input
                   className="search-input"
@@ -217,6 +246,56 @@ export default function App() {
                 />
                 <small>URL to the OVMS zip archive for Windows.</small>
               </div>
+            </div>
+
+            <div className="field">
+              <label>Search Tags</label>
+              <div className="tag-editor">
+                {(config.search_tags || []).map(tag => (
+                  <span key={tag} className="tag-pill">
+                    {tag}
+                    <button onClick={() => setConfig(c => ({ ...c, search_tags: c.search_tags.filter(t => t !== tag) }))}>×</button>
+                  </span>
+                ))}
+                <input
+                  className="tag-input"
+                  value={newTag}
+                  onChange={e => setNewTag(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newTag.trim()) {
+                      setConfig(c => ({ ...c, search_tags: [...(c.search_tags || []), newTag.trim()] }))
+                      setNewTag('')
+                    }
+                  }}
+                  placeholder="Add tag…"
+                />
+              </div>
+              <small>Clickable shortcuts on the Export search. Press Enter to add.</small>
+            </div>
+
+            <div className="field">
+              <label>Pipeline Filters</label>
+              <div className="tag-editor">
+                {(config.pipeline_filters || []).map(f => (
+                  <span key={f} className="tag-pill">
+                    {f}
+                    <button onClick={() => setConfig(c => ({ ...c, pipeline_filters: c.pipeline_filters.filter(x => x !== f) }))}>×</button>
+                  </span>
+                ))}
+                <input
+                  className="tag-input"
+                  value={newFilter}
+                  onChange={e => setNewFilter(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newFilter.trim()) {
+                      setConfig(c => ({ ...c, pipeline_filters: [...(c.pipeline_filters || []), newFilter.trim()] }))
+                      setNewFilter('')
+                    }
+                  }}
+                  placeholder="Add filter…"
+                />
+              </div>
+              <small>Restrict searches to these Hugging Face pipeline types. Press Enter to add.</small>
             </div>
 
             <label className="toggle-row">
