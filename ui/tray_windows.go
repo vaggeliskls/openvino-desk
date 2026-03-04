@@ -5,15 +5,18 @@ package main
 import (
 	"context"
 	_ "embed"
+	"os"
+	goruntime "runtime"
 
 	"github.com/getlantern/systray"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-//go:embed build/appicon.png
+//go:embed logo.ico
 var trayIcon []byte
 
 func startTray(ctx context.Context) {
+	goruntime.LockOSThread()
 	systray.Run(
 		func() {
 			systray.SetIcon(trayIcon)
@@ -27,9 +30,10 @@ func startTray(ctx context.Context) {
 				select {
 				case <-mShow.ClickedCh:
 					runtime.WindowShow(ctx)
+					runtime.WindowUnminimise(ctx)
 				case <-mQuit.ClickedCh:
-					runtime.Quit(ctx)
-					return
+					systray.Quit()
+					os.Exit(0)
 				}
 			}
 		},
