@@ -257,24 +257,21 @@ func (a *App) PullModel(modelID, targetDevice string) error {
 	modelsDir := filepath.Join(a.config.InstallDir, "models")
 	os.MkdirAll(modelsDir, 0755) //nolint: errcheck
 
-	configPath := filepath.Join(a.config.InstallDir, "config.json")
 	args := []string{
 		"--pull",
 		"--source_model", modelID,
 		"--model_repository_path", modelsDir,
 		"--model_name", modelID,
-		"--config_path", configPath,
-		"--add_to_config",
-	}
-	if targetDevice != "" {
-		args = append(args, "--target_device", targetDevice)
 	}
 
 	cmd := exec.Command(ovmsExe, args...)
 	cmd.Dir = ovmsDirPath
 	cmd.Env = buildOVMSEnv(ovmsDirPath)
 
-	return a.streamCmd(cmd)
+	if err := a.streamCmd(cmd); err != nil {
+		return err
+	}
+	return a.ovmsAddToConfig(ovmsExe, ovmsDirPath, modelID, modelsDir, targetDevice)
 }
 
 // ExportTextGen exports a text-generation model using ovms --pull --task text_generation.
@@ -311,9 +308,6 @@ func (a *App) ovmsPullTask(modelID, task, targetDevice string, extraOpts map[str
 		"--model_repository_path", modelsDir,
 		"--model_name", modelID,
 	}
-	if targetDevice != "" {
-		args = append(args, "--target_device", targetDevice)
-	}
 	for k, v := range extraOpts {
 		switch val := v.(type) {
 		case bool:
@@ -338,10 +332,24 @@ func (a *App) ovmsPullTask(modelID, task, targetDevice string, extraOpts map[str
 	if err := a.streamCmd(cmd); err != nil {
 		return err
 	}
-	if targetDevice != "" {
-		return a.updateModelTargetDevice(modelID, targetDevice)
+	return a.ovmsAddToConfig(ovmsExe, ovmsDirPath, modelID, modelsDir, targetDevice)
+}
+
+func (a *App) ovmsAddToConfig(ovmsExe, ovmsDirPath, modelID, modelsDir, targetDevice string) error {
+	cfgPath := filepath.Join(a.config.InstallDir, "config.json")
+	args := []string{
+		"--add_to_config", cfgPath,
+		"--model_name", modelID,
+		"--model_repository_path", modelsDir,
 	}
-	return nil
+	if targetDevice != "" {
+		args = append(args, "--target_device", targetDevice)
+	}
+	a.emit("$ " + ovmsExe + " " + strings.Join(args, " "))
+	cmd := exec.Command(ovmsExe, args...)
+	cmd.Dir = ovmsDirPath
+	cmd.Env = buildOVMSEnv(ovmsDirPath)
+	return a.streamCmd(cmd)
 }
 
 func (a *App) streamCmd(cmd *exec.Cmd) error {
@@ -399,39 +407,41 @@ func (a *App) streamLogReader(r io.Reader) {
 	}
 }
 
-// updateModelTargetDevice updates the target_device field for a model in config.json.
-func (a *App) updateModelTargetDevice(modelName, targetDevice string) error {
+// addModelToConfig upserts a model entry in config.json.
+func (a *App) addModelToConfig(modelName, basePath, targetDevice string) error {
 	cfgPath := filepath.Join(a.config.InstallDir, "config.json")
+
+	var cfg OVMSConfig
 	data, err := os.ReadFile(cfgPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
+	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("read config.json: %w", err)
 	}
-
-	var ovmsConfig OVMSConfig
-	if err := json.Unmarshal(data, &ovmsConfig); err != nil {
-		return fmt.Errorf("parse config.json: %w", err)
-	}
-
-	updated := false
-	for i := range ovmsConfig.ModelConfigList {
-		if ovmsConfig.ModelConfigList[i].Config.Name == modelName {
-			ovmsConfig.ModelConfigList[i].Config.TargetDevice = targetDevice
-			updated = true
-			break
+	if err == nil {
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			return fmt.Errorf("parse config.json: %w", err)
 		}
 	}
-	if !updated {
-		return nil
+
+	for i := range cfg.ModelConfigList {
+		if cfg.ModelConfigList[i].Config.Name == modelName {
+			cfg.ModelConfigList[i].Config.BasePath = basePath
+			cfg.ModelConfigList[i].Config.TargetDevice = targetDevice
+			return writeOVMSConfig(cfgPath, cfg)
+		}
 	}
 
-	updatedData, err := json.MarshalIndent(ovmsConfig, "", "  ")
+	cfg.ModelConfigList = append(cfg.ModelConfigList, OVMSConfigEntry{
+		Config: OVMSModelConfig{Name: modelName, BasePath: basePath, TargetDevice: targetDevice},
+	})
+	return writeOVMSConfig(cfgPath, cfg)
+}
+
+func writeOVMSConfig(cfgPath string, cfg OVMSConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshal config.json: %w", err)
 	}
-	return os.WriteFile(cfgPath, updatedData, 0644)
+	return os.WriteFile(cfgPath, data, 0644)
 }
 
 // ResetExport removes the deps-ready marker so PrepareExport will re-run.
@@ -585,17 +595,23 @@ type ModelInfo struct {
 	TargetDevice string `json:"target_device"`
 }
 
+// OVMSModelConfig is a single model entry in config.json.
+type OVMSModelConfig struct {
+	Name         string                 `json:"name"`
+	BasePath     string                 `json:"base_path"`
+	TargetDevice string                 `json:"target_device,omitempty"`
+	PluginConfig map[string]interface{} `json:"plugin_config,omitempty"`
+	Nireq        int                    `json:"nireq,omitempty"`
+}
+
+// OVMSConfigEntry wraps OVMSModelConfig in the config list.
+type OVMSConfigEntry struct {
+	Config OVMSModelConfig `json:"config"`
+}
+
 // OVMSConfig matches the structure of config.json used by OVMS.
 type OVMSConfig struct {
-	ModelConfigList []struct {
-		Config struct {
-			Name         string                 `json:"name"`
-			BasePath     string                 `json:"base_path"`
-			TargetDevice string                 `json:"target_device"`
-			PluginConfig map[string]interface{} `json:"plugin_config,omitempty"`
-			Nireq        int                    `json:"nireq,omitempty"`
-		} `json:"config"`
-	} `json:"model_config_list"`
+	ModelConfigList []OVMSConfigEntry `json:"model_config_list"`
 }
 
 // GetInstalledModels returns the list of models from config.json.
@@ -643,15 +659,7 @@ func (a *App) DeleteInstalledModel(modelName string) error {
 	}
 
 	var modelPath string
-	newList := make([]struct {
-		Config struct {
-			Name         string                 `json:"name"`
-			BasePath     string                 `json:"base_path"`
-			TargetDevice string                 `json:"target_device"`
-			PluginConfig map[string]interface{} `json:"plugin_config,omitempty"`
-			Nireq        int                    `json:"nireq,omitempty"`
-		} `json:"config"`
-	}, 0)
+	newList := make([]OVMSConfigEntry, 0)
 
 	for _, item := range ovmsConfig.ModelConfigList {
 		if item.Config.Name == modelName {
@@ -674,9 +682,5 @@ func (a *App) DeleteInstalledModel(modelName string) error {
 	}
 
 	ovmsConfig.ModelConfigList = newList
-	updatedData, err := json.MarshalIndent(ovmsConfig, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal config.json: %w", err)
-	}
-	return os.WriteFile(cfgPath, updatedData, 0644)
+	return writeOVMSConfig(cfgPath, ovmsConfig)
 }
