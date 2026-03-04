@@ -383,7 +383,11 @@ func (a *App) ExportTextGen(modelID string, opts TextGenExportConfig) error {
 	if opts.ToolParser != "" {
 		args = append(args, "--tool_parser", opts.ToolParser)
 	}
-	return setup.RunScriptEnv(a.config.InstallDir, a.venvEnv(), a.emit, venvPython, args...)
+	if err := setup.RunScriptEnv(a.config.InstallDir, a.venvEnv(), a.emit, venvPython, args...); err != nil {
+		return err
+	}
+	// Update config.json with target_device after export completes
+	return a.updateModelTargetDevice(modelID, opts.TargetDevice)
 }
 
 // ExportEmbeddings exports an embeddings model using export_model.py embeddings_ov.
@@ -408,7 +412,55 @@ func (a *App) ExportEmbeddings(modelID string, opts EmbeddingsExportConfig) erro
 	if opts.ExtraQuantizationParams != "" {
 		args = append(args, "--extra_quantization_params", opts.ExtraQuantizationParams)
 	}
-	return setup.RunScriptEnv(a.config.InstallDir, a.venvEnv(), a.emit, venvPython, args...)
+	if err := setup.RunScriptEnv(a.config.InstallDir, a.venvEnv(), a.emit, venvPython, args...); err != nil {
+		return err
+	}
+	// Update config.json with target_device after export completes
+	return a.updateModelTargetDevice(modelID, opts.TargetDevice)
+}
+
+// updateModelTargetDevice updates the target_device field for a model in config.json.
+func (a *App) updateModelTargetDevice(modelName, targetDevice string) error {
+	configPath := filepath.Join(a.config.InstallDir, "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		// If config doesn't exist yet, that's ok - it will be created by OVMS
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read config.json: %w", err)
+	}
+
+	var ovmsConfig OVMSConfig
+	if err := json.Unmarshal(data, &ovmsConfig); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+
+	// Find and update the model's target_device
+	updated := false
+	for i := range ovmsConfig.ModelConfigList {
+		if ovmsConfig.ModelConfigList[i].Config.Name == modelName {
+			ovmsConfig.ModelConfigList[i].Config.TargetDevice = targetDevice
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		// Model not found in config yet - this is normal, will be added later
+		return nil
+	}
+
+	// Write updated config
+	updatedData, err := json.MarshalIndent(ovmsConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config.json: %w", err)
+	}
+	if err := os.WriteFile(configPath, updatedData, 0644); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+
+	return nil
 }
 
 // ResetExport removes the uv binary, Python installation and export venv.
@@ -562,4 +614,114 @@ func (a *App) IsOVMSRunning() bool {
 	a.ovmsMu.Lock()
 	defer a.ovmsMu.Unlock()
 	return a.ovmsProc != nil
+}
+
+// ModelInfo represents an installed model with its configuration.
+type ModelInfo struct {
+	Name         string `json:"name"`
+	BasePath     string `json:"base_path"`
+	TargetDevice string `json:"target_device"`
+}
+
+// OVMSConfig matches the structure of config.json used by OVMS.
+type OVMSConfig struct {
+	ModelConfigList []struct {
+		Config struct {
+			Name         string                 `json:"name"`
+			BasePath     string                 `json:"base_path"`
+			TargetDevice string                 `json:"target_device"`
+			PluginConfig map[string]interface{} `json:"plugin_config,omitempty"`
+			Nireq        int                    `json:"nireq,omitempty"`
+		} `json:"config"`
+	} `json:"model_config_list"`
+}
+
+// GetInstalledModels returns the list of models from config.json.
+func (a *App) GetInstalledModels() ([]ModelInfo, error) {
+	configPath := filepath.Join(a.config.InstallDir, "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []ModelInfo{}, nil
+		}
+		return nil, fmt.Errorf("read config.json: %w", err)
+	}
+
+	var ovmsConfig OVMSConfig
+	if err := json.Unmarshal(data, &ovmsConfig); err != nil {
+		return nil, fmt.Errorf("parse config.json: %w", err)
+	}
+
+	models := make([]ModelInfo, 0, len(ovmsConfig.ModelConfigList))
+	for _, item := range ovmsConfig.ModelConfigList {
+		models = append(models, ModelInfo{
+			Name:         item.Config.Name,
+			BasePath:     item.Config.BasePath,
+			TargetDevice: item.Config.TargetDevice,
+		})
+	}
+	return models, nil
+}
+
+// DeleteInstalledModel removes a model from config.json and deletes its files.
+func (a *App) DeleteInstalledModel(modelName string) error {
+	if modelName == "" {
+		return fmt.Errorf("model name is required")
+	}
+
+	configPath := filepath.Join(a.config.InstallDir, "config.json")
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("read config.json: %w", err)
+	}
+
+	var ovmsConfig OVMSConfig
+	if err := json.Unmarshal(data, &ovmsConfig); err != nil {
+		return fmt.Errorf("parse config.json: %w", err)
+	}
+
+	// Find and remove the model from config
+	var modelPath string
+	newList := make([]struct {
+		Config struct {
+			Name         string                 `json:"name"`
+			BasePath     string                 `json:"base_path"`
+			TargetDevice string                 `json:"target_device"`
+			PluginConfig map[string]interface{} `json:"plugin_config,omitempty"`
+			Nireq        int                    `json:"nireq,omitempty"`
+		} `json:"config"`
+	}, 0)
+
+	for _, item := range ovmsConfig.ModelConfigList {
+		if item.Config.Name == modelName {
+			modelPath = item.Config.BasePath
+		} else {
+			newList = append(newList, item)
+		}
+	}
+
+	if modelPath == "" {
+		return fmt.Errorf("model %q not found in config.json", modelName)
+	}
+
+	// Update config.json
+	ovmsConfig.ModelConfigList = newList
+	updatedData, err := json.MarshalIndent(ovmsConfig, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal config.json: %w", err)
+	}
+	if err := os.WriteFile(configPath, updatedData, 0644); err != nil {
+		return fmt.Errorf("write config.json: %w", err)
+	}
+
+	// Delete model directory (convert Windows path separator if needed)
+	modelPath = filepath.FromSlash(strings.ReplaceAll(modelPath, "\\", "/"))
+	if !filepath.IsAbs(modelPath) {
+		modelPath = filepath.Join(a.config.InstallDir, modelPath)
+	}
+	if err := os.RemoveAll(modelPath); err != nil {
+		return fmt.Errorf("remove model directory: %w", err)
+	}
+
+	return nil
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { GetConfig, SaveConfig, PrepareExport, PrepareOVMS, ResetExport, ResetOVMS, CheckStatus, GetStartupEnabled, SetStartup, SearchModels, ExportTextGen, ExportEmbeddings, PullModel, StartOVMS, StopOVMS, IsOVMSRunning } from '../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, PrepareExport, PrepareOVMS, ResetExport, ResetOVMS, CheckStatus, GetStartupEnabled, SetStartup, SearchModels, ExportTextGen, ExportEmbeddings, PullModel, StartOVMS, StopOVMS, IsOVMSRunning, GetInstalledModels, DeleteInstalledModel } from '../wailsjs/go/main/App'
 import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
 function StatusBadge({ ready, label }) {
@@ -46,6 +46,11 @@ export default function App() {
   const [searching, setSearching] = useState(false)
   const [selectedModel, setSelectedModel] = useState('')
   const [activeFilters, setActiveFilters] = useState(null)
+  const [optionsExpanded, setOptionsExpanded] = useState(false)
+  const [rawOptsText, setRawOptsText] = useState('')
+  const [jsonError, setJsonError] = useState(false)
+  const [installedModels, setInstalledModels] = useState([])
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
 
   const logsEndRef = useRef(null)
   const initLogsEndRef = useRef(null)
@@ -120,13 +125,23 @@ export default function App() {
   }, [status])
 
   useEffect(() => {
+    if (tab === 'export' && status.uv_ready && status.deps_ready && status.ovms_ready) {
+      loadInstalledModels()
+    }
+  }, [tab, status])
+
+  useEffect(() => {
     if (!selectedModel) { setExportOpts(null); return }
     const info = searchResults.find(m => m.id === selectedModel)
     const tag = info?.pipeline_tag
-    if (tag === 'text-generation') setExportOpts({ ...(config.text_gen_export || {}) })
-    else if (tag === 'feature-extraction') setExportOpts({ ...(config.embeddings_export || {}) })
-    else setExportOpts(null)
-  }, [selectedModel, searchResults])
+    let opts = null
+    if (tag === 'text-generation') opts = { ...(config.text_gen_export || {}) }
+    else if (tag === 'feature-extraction') opts = { ...(config.embeddings_export || {}) }
+    setExportOpts(opts)
+    setRawOptsText(opts ? JSON.stringify(opts, null, 2) : '')
+    setJsonError(false)
+    setOptionsExpanded(false) // Reset collapsible state when model changes
+  }, [selectedModel, searchResults, config])
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -151,6 +166,31 @@ export default function App() {
       .then(() => {
         setLogs(prev => [...prev, '--- Done ---'])
         CheckStatus().then(setStatus)
+        loadInstalledModels()
+      })
+      .catch(err => setError(String(err)))
+      .finally(() => setRunning(false))
+  }
+
+  const loadInstalledModels = () => {
+    GetInstalledModels()
+      .then(models => setInstalledModels(models || []))
+      .catch(() => setInstalledModels([]))
+  }
+
+  const handleDeleteModel = (modelName) => {
+    setDeleteConfirm(modelName)
+  }
+
+  const confirmDelete = () => {
+    const modelName = deleteConfirm
+    setDeleteConfirm(null)
+    setRunning(true)
+    setLogs([`Deleting model ${modelName}...`])
+    DeleteInstalledModel(modelName)
+      .then(() => {
+        setLogs(prev => [...prev, `Model ${modelName} deleted successfully`, '--- Done ---'])
+        loadInstalledModels()
       })
       .catch(err => setError(String(err)))
       .finally(() => setRunning(false))
@@ -322,8 +362,35 @@ export default function App() {
               ? <NotReady onGo={() => setTab('dependencies')} />
               : (
                 <>
+                  {installedModels.length > 0 && (
+                    <div className="installed-models-section">
+                      <h3>Available Models</h3>
+                      <div className="installed-models-list">
+                        {installedModels.map(model => (
+                          <div key={model.name} className="installed-model-card">
+                            <div className="installed-model-info">
+                              <div className="installed-model-name">{model.name}</div>
+                              <div className="installed-model-device">
+                                <span className="device-label">Target Device:</span>
+                                <span className="device-value">{model.target_device}</span>
+                              </div>
+                            </div>
+                            <button
+                              className="btn-delete-model"
+                              disabled={running}
+                              onClick={() => handleDeleteModel(model.name)}
+                              title="Delete model"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="search-section">
-                    <h3>Export Model from Hugging Face</h3>
+                    <h3>Hugging face models</h3>
                     <div className="search-tags">
                       {(config.search_tags || []).map(tag => (
                         <button key={tag} className="search-tag" onClick={() => quickSearch(tag)}>{tag}</button>
@@ -374,70 +441,69 @@ export default function App() {
 
                         {selectedModel && !isSelectedOV && exportOpts && (
                           <div className="export-opts">
-                            {selectedModelInfo?.pipeline_tag === 'text-generation' && (
-                              <>
-                                <div className="opts-grid">
-                                  <label>Target Device
-                                    <select value={exportOpts.target_device || 'GPU'} onChange={e => setExportOpts(p => ({ ...p, target_device: e.target.value }))}>
-                                      <option>GPU</option><option>CPU</option><option>NPU</option>
-                                    </select>
-                                  </label>
-                                  <label>Cache (GB)
-                                    <input type="number" min="1" max="32" value={exportOpts.cache || 2} onChange={e => setExportOpts(p => ({ ...p, cache: parseInt(e.target.value) || 2 }))} />
-                                  </label>
-                                  <label>KV Precision
-                                    <select value={exportOpts.kv_cache_precision || 'u8'} onChange={e => setExportOpts(p => ({ ...p, kv_cache_precision: e.target.value }))}>
-                                      <option value="u8">u8</option><option value="fp16">fp16</option>
-                                    </select>
-                                  </label>
-                                  <label>Max Batched Tokens
-                                    <input type="number" min="256" value={exportOpts.max_num_batched_tokens || 2048} onChange={e => setExportOpts(p => ({ ...p, max_num_batched_tokens: parseInt(e.target.value) || 2048 }))} />
-                                  </label>
-                                  <label>Max Seqs
-                                    <input type="number" min="1" value={exportOpts.max_num_seqs || 8} onChange={e => setExportOpts(p => ({ ...p, max_num_seqs: parseInt(e.target.value) || 8 }))} />
-                                  </label>
-                                  <label>Reasoning Parser
-                                    <input value={exportOpts.reasoning_parser || ''} placeholder="e.g. qwen3" onChange={e => setExportOpts(p => ({ ...p, reasoning_parser: e.target.value }))} />
-                                  </label>
-                                  <label>Tool Parser
-                                    <input value={exportOpts.tool_parser || ''} placeholder="e.g. hermes3" onChange={e => setExportOpts(p => ({ ...p, tool_parser: e.target.value }))} />
-                                  </label>
-                                  <label className="opts-checkbox">
-                                    <input type="checkbox" checked={!!exportOpts.enable_prefix_caching} onChange={e => setExportOpts(p => ({ ...p, enable_prefix_caching: e.target.checked }))} />
-                                    Prefix Caching
-                                  </label>
+                            <div className="opts-list">
+                              <label>Target Device
+                                <select value={exportOpts.target_device || 'GPU'} onChange={e => {
+                                  const updated = { ...exportOpts, target_device: e.target.value }
+                                  setExportOpts(updated)
+                                  setRawOptsText(JSON.stringify(updated, null, 2))
+                                }}>
+                                  <option>GPU</option><option>CPU</option><option>NPU</option>
+                                </select>
+                              </label>
+                            </div>
+                            <div className="opts-collapsible">
+                              <button 
+                                className="opts-toggle" 
+                                onClick={() => setOptionsExpanded(!optionsExpanded)}
+                              >
+                                <span className="opts-toggle-icon">{optionsExpanded ? '▼' : '▶'}</span>
+                                Model Extract Options
+                              </button>
+                              {optionsExpanded && (
+                                <div className="opts-editor">
+                                  <textarea
+                                    className={`opts-raw-editor ${jsonError ? 'opts-editor-error' : ''}`}
+                                    value={rawOptsText}
+                                    onChange={e => {
+                                      const text = e.target.value
+                                      setRawOptsText(text)
+                                      try {
+                                        const parsed = JSON.parse(text)
+                                        setExportOpts(parsed)
+                                        setJsonError(false)
+                                      } catch (err) {
+                                        setJsonError(true)
+                                      }
+                                    }}
+                                    spellCheck={false}
+                                  />
+                                  {jsonError && <div className="opts-editor-error-msg">Invalid JSON syntax</div>}
                                 </div>
-                              </>
-                            )}
-                            {selectedModelInfo?.pipeline_tag === 'feature-extraction' && (
-                              <div className="opts-grid">
-                                <label>Target Device
-                                  <select value={exportOpts.target_device || 'CPU'} onChange={e => setExportOpts(p => ({ ...p, target_device: e.target.value }))}>
-                                    <option>CPU</option><option>GPU</option>
-                                  </select>
-                                </label>
-                                <label>Weight Format
-                                  <select value={exportOpts.weight_format || 'fp16'} onChange={e => setExportOpts(p => ({ ...p, weight_format: e.target.value }))}>
-                                    <option value="fp16">fp16</option><option value="int8">int8</option><option value="fp32">fp32</option>
-                                  </select>
-                                </label>
-                                <label className="opts-wide">Extra Quant Params
-                                  <input value={exportOpts.extra_quantization_params || ''} placeholder="e.g. --library sentence_transformers" onChange={e => setExportOpts(p => ({ ...p, extra_quantization_params: e.target.value }))} />
-                                </label>
-                              </div>
-                            )}
+                              )}
+                            </div>
                           </div>
                         )}
 
                         <div className="search-actions">
                           <button
                             className="btn-primary"
-                            disabled={running || !selectedModel}
+                            disabled={running || !selectedModel || jsonError}
                             onClick={() => {
-                              if (isSelectedOV) return run(() => PullModel(selectedModel))
-                              const tag = selectedModelInfo?.pipeline_tag
-                              if (tag === 'text-generation') return run(() => ExportTextGen(selectedModel, exportOpts))
-                              if (tag === 'feature-extraction') return run(() => ExportEmbeddings(selectedModel, exportOpts))
+                              if (isSelectedOV) {
+                                run(() => PullModel(selectedModel))
+                              } else {
+                                const tag = selectedModelInfo?.pipeline_tag
+                                const processedOpts = { ...exportOpts }
+                                if (tag === 'text-generation') {
+                                  processedOpts.cache = parseInt(processedOpts.cache) || 2
+                                  processedOpts.max_num_batched_tokens = parseInt(processedOpts.max_num_batched_tokens) || 2048
+                                  processedOpts.max_num_seqs = parseInt(processedOpts.max_num_seqs) || 8
+                                  processedOpts.enable_prefix_caching = processedOpts.enable_prefix_caching === 'true' || processedOpts.enable_prefix_caching === true
+                                }
+                                if (tag === 'text-generation') run(() => ExportTextGen(selectedModel, processedOpts))
+                                else if (tag === 'feature-extraction') run(() => ExportEmbeddings(selectedModel, processedOpts))
+                              }
                             }}
                           >
                             {running ? 'Running…' : isSelectedOV ? `Pull` : `Export`}
@@ -599,6 +665,26 @@ export default function App() {
           </div>
         )}
       </main>
+
+      {deleteConfirm && (
+        <div className="modal-overlay" onClick={() => setDeleteConfirm(null)}>
+          <div className="modal-content modal-confirm" onClick={e => e.stopPropagation()}>
+            <h3>Delete Model</h3>
+            <div className="modal-body">
+              <p className="modal-confirm-text">
+                Are you sure you want to delete <strong>{deleteConfirm}</strong>?
+              </p>
+              <p className="modal-confirm-warning">
+                This will remove the model from config.json and delete its files.
+              </p>
+            </div>
+            <div className="modal-actions">
+              <button className="btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
+              <button className="btn-delete" onClick={confirmDelete}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

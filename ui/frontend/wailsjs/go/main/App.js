@@ -6,6 +6,10 @@ export function CheckStatus() {
   return window['go']['main']['App']['CheckStatus']();
 }
 
+export function DeleteInstalledModel(arg1) {
+  return window['go']['main']['App']['DeleteInstalledModel'](arg1);
+}
+
 export function ExportEmbeddings(arg1, arg2) {
   return window['go']['main']['App']['ExportEmbeddings'](arg1, arg2);
 }
@@ -16,6 +20,10 @@ export function ExportTextGen(arg1, arg2) {
 
 export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
+}
+
+export function GetInstalledModels() {
+  return window['go']['main']['App']['GetInstalledModels']();
 }
 
 export function GetStartupEnabled() {

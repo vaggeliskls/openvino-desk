@@ -109,6 +109,22 @@ export namespace main {
 	        this.library_name = source["library_name"];
 	    }
 	}
+	export class ModelInfo {
+	    name: string;
+	    base_path: string;
+	    target_device: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.base_path = source["base_path"];
+	        this.target_device = source["target_device"];
+	    }
+	}
 	export class StatusResult {
 	    uv_ready: boolean;
 	    deps_ready: boolean;

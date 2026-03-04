@@ -4,11 +4,15 @@ import {main} from '../models';
 
 export function CheckStatus():Promise<main.StatusResult>;
 
+export function DeleteInstalledModel(arg1:string):Promise<void>;
+
 export function ExportEmbeddings(arg1:string,arg2:main.EmbeddingsExportConfig):Promise<void>;
 
 export function ExportTextGen(arg1:string,arg2:main.TextGenExportConfig):Promise<void>;
 
 export function GetConfig():Promise<main.Config>;
+
+export function GetInstalledModels():Promise<Array<main.ModelInfo>>;
 
 export function GetStartupEnabled():Promise<boolean>;
 
