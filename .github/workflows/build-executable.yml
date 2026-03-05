@@ -1,0 +1,44 @@
+name: Build Executable
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ui/go.mod
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Wails
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Copy app icons
+        run: |
+          Copy-Item ui\appicon.png ui\build\appicon.png
+          Copy-Item ui\logo.ico ui\build\windows\icon.ico
+
+      - name: Build executable
+        run: cd ui && wails build
+
+      - name: Rename executable with tag
+        run: Move-Item ui\build\bin\openvino-desktop.exe ui\build\bin\openvino-desktop-${{ github.ref_name }}.exe
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ui/build/bin/openvino-desktop-${{ github.ref_name }}.exe
