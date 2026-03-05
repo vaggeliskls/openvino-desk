@@ -21,6 +21,7 @@ func runCmd(workDir string, env []string, log LogFunc, name string, args ...stri
 		return err
 	}
 
+	hideWindow(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}

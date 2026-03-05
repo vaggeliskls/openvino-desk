@@ -378,6 +378,7 @@ func (a *App) ovmsAddToConfig(ovmsExe, ovmsDirPath, modelID, modelsDir, targetDe
 }
 
 func (a *App) streamCmd(cmd *exec.Cmd) error {
+	hideWindow(cmd)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -445,7 +446,9 @@ func writeOVMSConfig(cfgPath string, cfg OVMSConfig) error {
 func (a *App) ResetOVMS() error {
 	ovmsDirPath := filepath.Join(a.config.InstallDir, "ovms")
 	if _, err := os.Stat(ovmsDirPath); err == nil {
-		if err := exec.Command("cmd", "/c", "rd", "/s", "/q", ovmsDirPath).Run(); err != nil {
+		rmCmd := exec.Command("cmd", "/c", "rd", "/s", "/q", ovmsDirPath)
+		hideWindow(rmCmd)
+		if err := rmCmd.Run(); err != nil {
 			return fmt.Errorf("remove ovms: %w", err)
 		}
 	}
@@ -536,6 +539,7 @@ func (a *App) StartOVMS() error {
 	cmd := exec.Command(ovmsExe, "--port", "9000", "--rest_port", "8080", "--config_path", ovmsCfg)
 	cmd.Dir = ovmsDirPath
 	cmd.Env = buildOVMSEnv(ovmsDirPath)
+	hideWindow(cmd)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -679,7 +683,9 @@ func (a *App) DeleteInstalledModel(modelName string) error {
 	if !filepath.IsAbs(modelPath) {
 		modelPath = filepath.Join(a.config.InstallDir, modelPath)
 	}
-	if err := exec.Command("cmd", "/c", "rd", "/s", "/q", modelPath).Run(); err != nil {
+	rmCmd := exec.Command("cmd", "/c", "rd", "/s", "/q", modelPath)
+	hideWindow(rmCmd)
+	if err := rmCmd.Run(); err != nil {
 		return fmt.Errorf("remove model directory: %w", err)
 	}
 

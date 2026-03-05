@@ -100,7 +100,9 @@ func unzip(zipPath, destDir string) error {
 	if err := os.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
-	return exec.Command("tar", "-xf", zipPath, "-C", destDir).Run()
+	cmd := exec.Command("tar", "-xf", zipPath, "-C", destDir)
+	hideWindow(cmd)
+	return cmd.Run()
 }
 
 // removeDir deletes a directory tree using rd /s /q (fast native Windows deletion).
@@ -108,7 +110,9 @@ func removeDir(path string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil
 	}
-	return exec.Command("cmd", "/c", "rd", "/s", "/q", path).Run()
+	cmd := exec.Command("cmd", "/c", "rd", "/s", "/q", path)
+	hideWindow(cmd)
+	return cmd.Run()
 }
 
 // RunScript runs an arbitrary command in workDir, streaming output via log.
