@@ -119,7 +119,7 @@ func defaultConfig() Config {
 		PipelineFilters:        defaultPipelineFilters,
 		SearchLimit:            30,
 		TextGenTargetDevice:    "GPU",
-		EmbeddingsTargetDevice: "CPU",
+		EmbeddingsTargetDevice: "GPU",
 	}
 }
 
@@ -150,7 +150,7 @@ func (a *App) loadConfig() {
 		a.config.TextGenTargetDevice = "GPU"
 	}
 	if a.config.EmbeddingsTargetDevice == "" {
-		a.config.EmbeddingsTargetDevice = "CPU"
+		a.config.EmbeddingsTargetDevice = "GPU"
 	}
 }
 
