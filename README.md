@@ -59,10 +59,48 @@ Returns the list of installed models.
   {
     "name": "OpenVINO/Qwen3-Embedding-0.6B-int8-ov",
     "base_path": "C:\\Users\\user\\openvino-desktop\\models\\OpenVINO\\Qwen3-Embedding-0.6B-int8-ov",
-    "target_device": "CPU"
+    "target_device": "CPU",
+    "task": "feature-extraction"
   }
 ]
 ```
+
+The `task` field is the HuggingFace pipeline tag (`"text-generation"` or `"feature-extraction"`) stored at pull/export time.
+
+#### `GET /models/test`
+Sends a short prompt to every installed model via the OVMS inference API and returns the results. Useful for verifying all models are loaded and responding.
+
+- `"text-generation"` models are tested via `POST /v3/chat/completions` with `"hello"`
+- `"feature-extraction"` models are tested via `POST /v3/embeddings` with `"hello"`
+
+```bash
+curl http://localhost:3333/models/test
+```
+
+```json
+[
+  {
+    "model": "Qwen/Qwen2.5-0.5B-Instruct",
+    "type": "text-generation",
+    "status": 200,
+    "response": { ... }
+  },
+  {
+    "model": "BAAI/bge-small-en-v1.5",
+    "type": "embeddings",
+    "status": 200,
+    "response": { ... }
+  }
+]
+```
+
+| Field | Description |
+|-------|-------------|
+| `model` | Model name |
+| `type` | `"text-generation"` or `"embeddings"` |
+| `status` | HTTP status code returned by OVMS |
+| `response` | Raw OVMS response body |
+| `error` | Set if the request to OVMS failed entirely |
 
 #### `POST /models/pull`
 Pulls a pre-converted OpenVINO model from Hugging Face. Returns `202 Accepted` immediately — operation runs in the background.
