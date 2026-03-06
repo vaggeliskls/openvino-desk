@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { GetConfig, SaveConfig, PrepareOVMS, ResetOVMS, CheckStatus, GetStartupEnabled, SetStartup, SearchModels, ExportTextGen, ExportEmbeddings, PullModel, StartOVMS, StopOVMS, IsOVMSRunning, GetInstalledModels, DeleteInstalledModel, GetAvailableDevices } from '../wailsjs/go/main/App'
+import { GetConfig, SaveConfig, PrepareOVMS, ResetOVMS, CheckStatus, GetStartupEnabled, SetStartup, SearchModels, ExportTextGen, ExportEmbeddings, PullModel, StartOVMS, StopOVMS, IsOVMSRunning, GetInstalledModels, DeleteInstalledModel, GetAvailableDevices, Chat } from '../wailsjs/go/main/App'
 import { EventsOn, BrowserOpenURL } from '../wailsjs/runtime/runtime'
 
 const PROGRESS_MAP = {
@@ -62,6 +62,13 @@ export default function App() {
   const [activeFilters, setActiveFilters] = useState(null)
   const [installedModels, setInstalledModels] = useState([])
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+
+  const [chatModel, setChatModel] = useState('')
+  const [chatMessages, setChatMessages] = useState([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [chatError, setChatError] = useState(null)
+  const chatEndRef = useRef(null)
 
   const logsEndRef = useRef(null)
   const initLogsEndRef = useRef(null)
@@ -139,7 +146,7 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (tab === 'models' && status?.deps_ready && status?.ovms_ready) {
+    if ((tab === 'models' || tab === 'chat') && status?.deps_ready && status?.ovms_ready) {
       loadInstalledModels()
     }
   }, [tab, status])
@@ -167,6 +174,29 @@ export default function App() {
   useEffect(() => {
     serverLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [serverLogs])
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const sendChat = async () => {
+    const text = chatInput.trim()
+    if (!text || !chatModel || chatLoading) return
+    const userMsg = { role: 'user', content: text }
+    const next = [...chatMessages, userMsg]
+    setChatMessages(next)
+    setChatInput('')
+    setChatError(null)
+    setChatLoading(true)
+    try {
+      const reply = await Chat(chatModel, next)
+      setChatMessages(prev => [...prev, { role: 'assistant', content: reply }])
+    } catch (err) {
+      setChatError(String(err))
+    } finally {
+      setChatLoading(false)
+    }
+  }
 
   const handleSave = async () => {
     await SaveConfig(config)
@@ -298,7 +328,7 @@ export default function App() {
       <header className="app-header">
         <span className="app-title">Turintech - OpenVINO Desktop</span>
         <nav className="tabs">
-          {['server', 'models', 'settings'].map(t => {
+          {['server', 'models', 'chat', 'settings'].map(t => {
             const label = t === 'server' ? 'Models Server' : t.charAt(0).toUpperCase() + t.slice(1)
             return (
               <button
@@ -316,7 +346,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="tab-content">
+      <main className={`tab-content${tab === 'chat' ? ' tab-content--chat' : ''}`}>
         {tab === 'server' && (
           <div className="panel">
             <div className="devices-info">
@@ -513,6 +543,92 @@ export default function App() {
             </>
           </div>
         )}
+
+        {tab === 'chat' && (() => {
+          const textGenModels = installedModels.filter(m => m.task === 'text-generation')
+          const chatDisabled = !serverRunning || textGenModels.length === 0
+
+          return (
+            <div className="chat-panel">
+              {!serverRunning && (
+                <div className="chat-notice chat-notice--warn">
+                  OVMS server is not running. Go to the <strong>Models Server</strong> tab and start it first.
+                </div>
+              )}
+              {serverRunning && textGenModels.length === 0 && (
+                <div className="chat-notice chat-notice--warn">
+                  No text-generation models installed. Go to the <strong>Models</strong> tab to pull or export one.
+                </div>
+              )}
+
+              <div className="chat-toolbar">
+                <select
+                  className="chat-model-select"
+                  value={chatModel}
+                  disabled={chatDisabled}
+                  onChange={e => { setChatModel(e.target.value); setChatMessages([]); setChatError(null) }}
+                >
+                  {chatModel === '' && <option value="">Select model…</option>}
+                  {textGenModels.map(m => (
+                    <option key={m.name} value={m.name}>{m.name}</option>
+                  ))}
+                </select>
+                {chatMessages.length > 0 && (
+                  <button className="btn-ghost" onClick={() => { setChatMessages([]); setChatError(null) }}>
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <div className="chat-messages">
+                {!chatDisabled && chatMessages.length === 0 && !chatError && (
+                  <div className="chat-empty">
+                    {chatModel ? 'Send a message to start chatting.' : 'Select a model above to begin.'}
+                  </div>
+                )}
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`chat-bubble chat-bubble--${msg.role}`}>
+                    <div className="chat-bubble-role">{msg.role === 'user' ? 'You' : 'Assistant'}</div>
+                    <div className="chat-bubble-content">{msg.content}</div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="chat-bubble chat-bubble--assistant">
+                    <div className="chat-bubble-role">Assistant</div>
+                    <div className="chat-typing"><span /><span /><span /></div>
+                  </div>
+                )}
+                {chatError && <div className="error" style={{ margin: '8px 0' }}>{chatError}</div>}
+                <div ref={chatEndRef} />
+              </div>
+
+              <div className="chat-input-row">
+                <textarea
+                  className="chat-input"
+                  placeholder={
+                    !serverRunning ? 'Server is not running…' :
+                    textGenModels.length === 0 ? 'No models available…' :
+                    chatModel ? 'Type a message…' : 'Select a model first…'
+                  }
+                  disabled={chatDisabled || !chatModel || chatLoading}
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() }
+                  }}
+                  rows={2}
+                />
+                <button
+                  className="btn-primary chat-send-btn"
+                  disabled={chatDisabled || !chatModel || !chatInput.trim() || chatLoading}
+                  onClick={sendChat}
+                >
+                  {chatLoading ? '…' : 'Send'}
+                </button>
+              </div>
+            </div>
+          )
+        })()}
 
         {tab === 'settings' && (
           <div className="panel">
