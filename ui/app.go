@@ -871,3 +871,40 @@ func (a *App) DeleteInstalledModel(modelName string) error {
 	}
 	return nil
 }
+
+// Chat sends a conversation to the specified text-generation model via OVMS
+// and returns the assistant's reply.
+func (a *App) Chat(modelName string, messages []map[string]string) (string, error) {
+	if modelName == "" {
+		return "", fmt.Errorf("no model selected")
+	}
+	url := fmt.Sprintf("http://localhost:%d/v3/chat/completions", a.config.OVMSRestPort)
+	code, raw, err := ovmsPost(url, map[string]any{
+		"model":      modelName,
+		"max_tokens": 512,
+		"messages":   messages,
+	})
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return "", fmt.Errorf("parse response (HTTP %d): %w", code, err)
+	}
+	if result.Error.Message != "" {
+		return "", fmt.Errorf("%s", result.Error.Message)
+	}
+	if len(result.Choices) == 0 {
+		return "", fmt.Errorf("no response from model")
+	}
+	return result.Choices[0].Message.Content, nil
+}
