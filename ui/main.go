@@ -20,7 +20,7 @@ func main() {
 	app := NewApp(embeddedAssets)
 
 	err := wails.Run(&options.App{
-		Title:  "OpenVINO",
+		Title:  "Turintech - OpenVINO Desktop",
 		Width:  900,
 		Height: 650,
 		AssetServer: &assetserver.Options{

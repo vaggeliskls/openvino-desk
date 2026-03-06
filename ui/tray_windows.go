@@ -20,7 +20,7 @@ func startTray(ctx context.Context) {
 	systray.Run(
 		func() {
 			systray.SetIcon(trayIcon)
-			systray.SetTooltip("OpenVINO Desktop")
+			systray.SetTooltip("Turintech - OpenVINO Desktop")
 
 			mShow := systray.AddMenuItem("Show", "Open the window")
 			systray.AddSeparator()

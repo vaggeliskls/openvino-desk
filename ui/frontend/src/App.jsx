@@ -273,7 +273,7 @@ export default function App() {
     return (
       <div className="loading-screen">
         <div className="loading-content">
-          <div className="loading-title">OpenVINO Desktop</div>
+          <div className="loading-title">Turintech - OpenVINO Desktop</div>
           <div className="loading-step">{initStep}</div>
           <div className="progress-bar">
             <div className="progress-fill" style={{ width: `${progress}%` }} />
@@ -295,7 +295,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <span className="app-title">OpenVINO Desktop</span>
+        <span className="app-title">Turintech - OpenVINO Desktop</span>
         <nav className="tabs">
           {['server', 'models', 'settings'].map(t => {
             const label = t === 'server' ? 'Models Server' : t.charAt(0).toUpperCase() + t.slice(1)
