@@ -147,11 +147,15 @@ export default function App() {
     if (!selectedModel) return
     const info = searchResults.find(m => m.id === selectedModel)
     const tag = info?.pipeline_tag
-    if (tag === 'text-generation') setTargetDevice(config.text_gen_target_device || 'GPU')
-    else if (tag === 'feature-extraction') setTargetDevice(config.embeddings_target_device || 'CPU')
+    const clamp = (preferred) => {
+      if (availableDevices.length === 0) return preferred
+      return availableDevices.includes(preferred) ? preferred : availableDevices[0]
+    }
+    if (tag === 'text-generation') setTargetDevice(clamp(config.text_gen_target_device || 'GPU'))
+    else if (tag === 'feature-extraction') setTargetDevice(clamp(config.embeddings_target_device || 'GPU'))
     setExtraOptsText('{\n  "weight-format": "int8"\n}')
     setExtraOptsError(false)
-  }, [selectedModel, searchResults])
+  }, [selectedModel, searchResults, availableDevices])
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -439,10 +443,7 @@ export default function App() {
                           <div className="export-opts">
                             <label>Target Device
                               <select value={targetDevice} onChange={e => setTargetDevice(e.target.value)}>
-                                <option>CPU</option>
-                                <option>GPU</option>
-                                <option>NPU</option>
-                                <option>AUTO</option>
+                                {availableDevices.map(d => <option key={d}>{d}</option>)}
                               </select>
                             </label>
                             {!isSelectedOV && (

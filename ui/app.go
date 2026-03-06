@@ -319,7 +319,7 @@ func (a *App) PullModel(modelID, targetDevice, pipelineTag string) error {
 	if task == "" {
 		return fmt.Errorf("unsupported pipeline tag %q: must be text-generation or feature-extraction", pipelineTag)
 	}
-	args = append(args, "--task", task)
+	args = append(args, "--task", task, "--target_device", targetDevice)
 
 	cmd := exec.Command(ovmsExe, args...)
 	cmd.Dir = ovmsDirPath
@@ -328,7 +328,7 @@ func (a *App) PullModel(modelID, targetDevice, pipelineTag string) error {
 	if err := a.streamCmd(cmd); err != nil {
 		return err
 	}
-	return a.ovmsAddToConfig(ovmsExe, ovmsDirPath, modelID, modelsDir, targetDevice)
+	return a.ovmsAddToConfig(modelID, modelsDir, targetDevice)
 }
 
 // ExportTextGen exports a text-generation model using export_model.py.
@@ -369,9 +369,7 @@ func (a *App) exportWithScript(modelID, targetDevice, task string, extraOpts map
 		"--source_model", modelID,
 		"--model_repository_path", modelsDir,
 		"--model_name", modelID,
-	}
-	if targetDevice != "" {
-		args = append(args, "--target_device", targetDevice)
+		"--target_device", targetDevice,
 	}
 	for k, v := range extraOpts {
 		switch val := v.(type) {
@@ -397,19 +395,25 @@ func (a *App) exportWithScript(modelID, targetDevice, task string, extraOpts map
 	if err := a.streamCmd(cmd); err != nil {
 		return err
 	}
-	ovmsExe := filepath.Join(ovmsDirPath, "ovms.exe")
-	return a.ovmsAddToConfig(ovmsExe, ovmsDirPath, modelID, modelsDir, targetDevice)
+	return a.ovmsAddToConfig(modelID, modelsDir, targetDevice)
 }
 
-func (a *App) ovmsAddToConfig(_, _, modelID, modelsDir, targetDevice string) error {
+func (a *App) ovmsAddToConfig(modelID, modelsDir, targetDevice string) error {
 	cfgPath := filepath.Join(a.config.InstallDir, "config.json")
 	var cfg OVMSConfig
 	if data, err := os.ReadFile(cfgPath); err == nil {
 		json.Unmarshal(data, &cfg) //nolint: errcheck — start fresh on parse error
 	}
-	for _, e := range cfg.ModelConfigList {
+	for i, e := range cfg.ModelConfigList {
 		if e.Config.Name == modelID {
-			a.emit("Model already in config.json, skipping.")
+			if cfg.ModelConfigList[i].Config.TargetDevice != targetDevice {
+				cfg.ModelConfigList[i].Config.TargetDevice = targetDevice
+				a.emit("Updating target_device for " + modelID + " to " + targetDevice)
+				if err := writeOVMSConfig(cfgPath, cfg); err != nil {
+					return err
+				}
+				a.restartOVMSIfRunning()
+			}
 			return nil
 		}
 	}
@@ -428,15 +432,21 @@ func (a *App) ovmsAddToConfig(_, _, modelID, modelsDir, targetDevice string) err
 	return nil
 }
 
-// stopAndWait kills the OVMS process (if running) and blocks until it exits.
+// stopAndWait kills the OVMS process tree (if running) and blocks until it exits.
+// taskkill /F /T kills the process and all its children so child processes
+// (Python workers etc.) release their port bindings before we return.
 func (a *App) stopAndWait() {
 	a.ovmsMu.Lock()
 	if a.ovmsProc == nil {
 		a.ovmsMu.Unlock()
 		return
 	}
-	a.ovmsProc.Process.Kill() //nolint: errcheck
+	pid := a.ovmsProc.Process.Pid
 	a.ovmsMu.Unlock()
+
+	tk := exec.Command("taskkill", "/F", "/T", "/PID", strconv.Itoa(pid))
+	hideWindow(tk)
+	tk.Run() //nolint: errcheck
 
 	for {
 		a.ovmsMu.Lock()
@@ -620,7 +630,9 @@ func (a *App) StartOVMS() error {
 	modelsDir := filepath.Join(a.config.InstallDir, "models")
 	os.MkdirAll(modelsDir, 0755) //nolint: errcheck
 
-	cmd := exec.Command(ovmsExe, "--port", "9000", "--rest_port", "8080", "--config_path", ovmsCfg)
+	args := []string{"--port", "9000", "--rest_port", "8080", "--config_path", ovmsCfg}
+	a.emitServerLog("$ " + ovmsExe + " " + strings.Join(args, " "))
+	cmd := exec.Command(ovmsExe, args...)
 	cmd.Dir = ovmsDirPath
 	cmd.Env = buildOVMSEnv(ovmsDirPath)
 	hideWindow(cmd)
@@ -766,20 +778,25 @@ func (a *App) DeleteInstalledModel(modelName string) error {
 		return fmt.Errorf("model %q not found in config.json", modelName)
 	}
 
-	modelPath = filepath.FromSlash(strings.ReplaceAll(modelPath, "\\", "/"))
-	if !filepath.IsAbs(modelPath) {
-		modelPath = filepath.Join(a.config.InstallDir, modelPath)
-	}
-	rmCmd := exec.Command("cmd", "/c", "rd", "/s", "/q", modelPath)
-	hideWindow(rmCmd)
-	if err := rmCmd.Run(); err != nil {
-		return fmt.Errorf("remove model directory: %w", err)
-	}
-
 	ovmsConfig.ModelConfigList = newList
 	if err := writeOVMSConfig(cfgPath, ovmsConfig); err != nil {
 		return err
 	}
+
+	if !filepath.IsAbs(modelPath) {
+		modelPath = filepath.Join(a.config.InstallDir, modelPath)
+	}
+	var removeErr error
+	for range 5 {
+		if removeErr = os.RemoveAll(modelPath); removeErr == nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if removeErr != nil {
+		a.emit("Warning: could not fully remove model directory: " + removeErr.Error())
+	}
+
 	a.StartOVMS() //nolint: errcheck
 	return nil
 }
