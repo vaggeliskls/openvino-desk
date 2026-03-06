@@ -20,7 +20,7 @@ else
     PATHSEP   = /
 endif
 
-.PHONY: help install export run clean get-remote-export openvino build-cli ui-dev ui-build
+.PHONY: help deps install export run clean get-remote-export openvino build-cli ui-dev ui-build
 
 help:
 	@echo Available commands:
@@ -33,6 +33,9 @@ help:
 	@echo   make build-cli          - Build the Go CLI binary
 	@echo   make ui-dev             - Run Wails UI in development mode
 	@echo   make ui-build           - Build Wails UI as a Windows executable
+
+deps:
+	go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
 install:
 	./$(UV_BIN) python install 3.12.12 --install-dir ./python
