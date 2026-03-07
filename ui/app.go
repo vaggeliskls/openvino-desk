@@ -562,6 +562,7 @@ func writeOVMSConfig(cfgPath string, cfg OVMSConfig) error {
 // ResetOVMS removes the OVMS server directory and the deps-ready marker.
 // Uses rd /s /q for fast native Windows deletion.
 func (a *App) ResetOVMS() error {
+	a.stopAndWait()
 	ovmsDirPath := filepath.Join(a.config.InstallDir, "ovms")
 	if _, err := os.Stat(ovmsDirPath); err == nil {
 		rmCmd := exec.Command("cmd", "/c", "rd", "/s", "/q", ovmsDirPath)
@@ -570,9 +571,11 @@ func (a *App) ResetOVMS() error {
 			return fmt.Errorf("remove ovms: %w", err)
 		}
 	}
-	marker := filepath.Join(a.config.InstallDir, ".deps-ready")
-	if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove marker: %w", err)
+	for _, name := range []string{".deps-ready", "config.json", "model_meta.json"} {
+		path := filepath.Join(a.config.InstallDir, name)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("remove %s: %w", name, err)
+		}
 	}
 	return nil
 }
