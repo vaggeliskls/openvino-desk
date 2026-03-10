@@ -166,8 +166,9 @@ export default function App() {
       return availableDevices.includes(preferred) ? preferred : availableDevices[0]
     }
     if (tag === 'text-generation') setTargetDevice(clamp(config.text_gen_target_device || 'GPU'))
-    else if (tag === 'feature-extraction') setTargetDevice(clamp(config.embeddings_target_device || 'GPU'))
-    setExtraOptsText('{\n  "weight-format": "int8"\n}')
+    else if (tag === 'feature-extraction' || tag === 'sentence-similarity') setTargetDevice(clamp(config.embeddings_target_device || 'GPU'))
+    const defaultFormat = (tag === 'feature-extraction' || tag === 'sentence-similarity') ? 'fp16' : 'int8'
+    setExtraOptsText(`{\n  "weight-format": "${defaultFormat}"\n}`)
     setExtraOptsError(false)
   }, [selectedModel, searchResults, availableDevices])
 
@@ -568,7 +569,7 @@ export default function App() {
                                 const extraOpts = (() => { try { return JSON.parse(extraOptsText) } catch { return {} } })()
                                 const tag = selectedModelInfo?.pipeline_tag
                                 if (tag === 'text-generation' || tag === 'image-text-to-text') run(() => ExportTextGen(selectedModel, targetDevice, extraOpts))
-                                else if (tag === 'feature-extraction') run(() => ExportEmbeddings(selectedModel, targetDevice, extraOpts))
+                                else if (tag === 'feature-extraction' || tag === 'sentence-similarity') run(() => ExportEmbeddings(selectedModel, targetDevice, extraOpts))
                               }
                             }}
                           >
