@@ -46,6 +46,7 @@ type Config struct {
 	APIPort                int      `json:"api_port"`
 	OVMSRestPort           int      `json:"ovms_rest_port"`
 	EnabledCategories      []string `json:"enabled_categories"`
+	LogLevel               string   `json:"log_level"`
 }
 
 // StatusResult reports whether each component is ready.
@@ -164,6 +165,7 @@ func defaultConfig() Config {
 		EmbeddingsTargetDevice: "GPU",
 		APIPort:                3333,
 		OVMSRestPort:           8080,
+		LogLevel:               "INFO",
 	}
 }
 
@@ -730,7 +732,11 @@ func (a *App) StartOVMS() error {
 	modelsDir := filepath.Join(a.config.InstallDir, "models")
 	os.MkdirAll(modelsDir, 0755) //nolint: errcheck
 
-	args := []string{"--port", "9000", "--rest_port", strconv.Itoa(a.config.OVMSRestPort), "--config_path", ovmsCfg}
+	logLevel := a.config.LogLevel
+	if logLevel == "" {
+		logLevel = "INFO"
+	}
+	args := []string{"--port", "9000", "--rest_port", strconv.Itoa(a.config.OVMSRestPort), "--config_path", ovmsCfg, "--log_level", logLevel}
 	a.emitServerLog("$ " + ovmsExe + " " + strings.Join(args, " "))
 	cmd := exec.Command(ovmsExe, args...)
 	cmd.Dir = ovmsDirPath

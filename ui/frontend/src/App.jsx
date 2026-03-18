@@ -70,6 +70,7 @@ export default function App() {
     uv_url: '',
     api_port: 3333,
     ovms_rest_port: 8080,
+    log_level: 'INFO',
     search_tags: [],
     pipeline_filters: [],
     search_limit: 30,
@@ -944,6 +945,20 @@ export default function App() {
                   onChange={e => setConfig(c => ({ ...c, ovms_rest_port: parseInt(e.target.value) || 8080 }))}
                 />
                 <small>Port the OVMS inference server listens on (default: 8080). Requires restart to take effect.</small>
+              </div>
+
+              <div className="field">
+                <label>Log Level</label>
+                <select
+                  value={config.log_level || 'INFO'}
+                  onChange={e => setConfig(c => ({ ...c, log_level: e.target.value }))}
+                >
+                  <option value="DEBUG">DEBUG</option>
+                  <option value="INFO">INFO</option>
+                  <option value="WARNING">WARNING</option>
+                  <option value="ERROR">ERROR</option>
+                </select>
+                <small>OVMS server log verbosity. Requires restart to take effect.</small>
               </div>
 
             </div>
