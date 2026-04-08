@@ -15,4 +15,4 @@ sentencepiece
 timm==1.0.25
 torchvision
 torch==2.9.1+cpu
-transformers==4.55.4
+transformers==5.0.0rc3
