@@ -42,6 +42,7 @@ export namespace main {
 	    api_port: number;
 	    ovms_rest_port: number;
 	    enabled_categories: string[];
+	    log_level: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -60,6 +61,7 @@ export namespace main {
 	        this.api_port = source["api_port"];
 	        this.ovms_rest_port = source["ovms_rest_port"];
 	        this.enabled_categories = source["enabled_categories"];
+	        this.log_level = source["log_level"];
 	    }
 	}
 	export class HFModel {

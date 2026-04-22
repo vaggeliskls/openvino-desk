@@ -1,0 +1,82 @@
+version: '3'
+
+vars:
+  UV_BIN: '{{if eq OS "windows"}}uv.exe{{else}}uv{{end}}'
+  PYTHON: '{{if eq OS "windows"}}export/Scripts/python.exe{{else}}export/Scripts/python{{end}}'
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  deps:
+    desc: Install Wails CLI
+    cmds:
+      - go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+  install:
+    desc: Create venv and install dependencies
+    cmds:
+      - ./{{.UV_BIN}} python install 3.12.12 --install-dir ./python
+      - ./{{.UV_BIN}} venv export --python ./python/cpython-3.12.12-windows-x86_64-none/python.exe --relocatable
+      - ./{{.UV_BIN}} pip install --python {{.PYTHON}} -r ui/assets/export-model-requirements/requirements.txt
+
+  export:
+    desc: Run model export script (pass args with -- <args>)
+    cmds:
+      - '{{.PYTHON}} ui/assets/export-model-requirements/export_model.py {{.CLI_ARGS}}'
+
+  run:
+    desc: Start OVMS server
+    cmds:
+      - ovms/setupvars.ps1 && ovms/ovms.exe --rest_port 8000 --config_path config.json
+
+  openvino:
+    desc: Download and extract OVMS server
+    cmds:
+      - rm -rf ovms
+      - curl -L https://github.com/openvinotoolkit/model_server/releases/download/v2026.0/ovms_windows_python_on.zip -o ovms-tmp.zip
+      - tar -xf ovms-tmp.zip
+      - rm -f ovms-tmp.zip
+
+  build-cli:
+    desc: Build the Go CLI binary
+    dir: cli
+    cmds:
+      - go build -o ../openvino-cli.exe .
+
+  appicon:
+    desc: Copy app icons into Wails build dir
+    cmds:
+      - mkdir -p ui/build/windows
+      - cp ui/appicon.png ui/build/appicon.png
+      - cp ui/logo.ico ui/build/windows/icon.ico
+
+  ui-dev:
+    desc: Run Wails UI in development mode
+    deps: [appicon]
+    dir: ui
+    cmds:
+      - wails dev
+
+  ui-build:
+    desc: Build Wails UI as a Windows executable
+    deps: [appicon]
+    dir: ui
+    cmds:
+      - wails build
+
+  get-remote-export:
+    desc: Download and extract latest export release
+    cmds:
+      - rm -rf export
+      - curl -L https://github.com/turintech/openvino-desktop/releases/latest/download/export-windows.zip -o export-windows.zip
+      - tar -xf export-windows.zip
+      - rm -f export-windows.zip
+
+  clean:
+    desc: Remove venv and python
+    cmds:
+      - rm -rf export python

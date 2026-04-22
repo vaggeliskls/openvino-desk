@@ -143,13 +143,18 @@ Only one pull/export can run at a time. A second request while busy returns `409
 
 ## Development
 
+This project uses [Task](https://taskfile.dev) as its task runner. Install it with `go install github.com/go-task/task/v3/cmd/task@latest` or see the [install docs](https://taskfile.dev/installation/).
+
 ```bash
+# List available tasks
+task
+
 # Install dependencies
-make deps
+task deps
 
 # Run in dev mode (hot-reload for frontend)
-make ui-dev
+task ui-dev
 
 # Build production binary
-make ui-build
+task ui-build
 ```
