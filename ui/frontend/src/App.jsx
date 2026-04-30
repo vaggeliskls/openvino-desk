@@ -117,12 +117,18 @@ export default function App() {
   const [benchRunning, setBenchRunning] = useState({})
   const [benchIterations, setBenchIterations] = useState(5)
   const [benchPrompt, setBenchPrompt] = useState('Describe the benefits of AI in one sentence.')
+  const [updateInfo, setUpdateInfo] = useState(null)
   const chatEndRef = useRef(null)
 
   const logsEndRef = useRef(null)
   const initLogsEndRef = useRef(null)
   const serverLogsEndRef = useRef(null)
   const startupRan = useRef(false)
+
+  useEffect(() => {
+    const offUpdate = EventsOn('update-available', info => setUpdateInfo(info))
+    return () => { if (offUpdate) offUpdate() }
+  }, [])
 
   useEffect(() => {
     const offLog = EventsOn('log', line => {
@@ -425,6 +431,11 @@ export default function App() {
         </nav>
         <div className="status-row header-status">
           <StatusBadge ready={serverRunning} label={status.ovms_version ? `OVMS ${status.ovms_version}` : 'OVMS'} />
+          {updateInfo && (
+            <button className="status-badge update-badge" onClick={() => BrowserOpenURL(updateInfo.url)} title={updateInfo.release_notes || `Download ${updateInfo.version}`}>
+              <span className="status-dot" />New Version
+            </button>
+          )}
         </div>
       </header>
 

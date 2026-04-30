@@ -6,6 +6,10 @@ export function Chat(arg1, arg2) {
   return window['go']['main']['App']['Chat'](arg1, arg2);
 }
 
+export function CheckForUpdate() {
+  return window['go']['main']['App']['CheckForUpdate']();
+}
+
 export function CheckStatus() {
   return window['go']['main']['App']['CheckStatus']();
 }
@@ -40,6 +44,10 @@ export function GetPipelineFilters() {
 
 export function GetStartupEnabled() {
   return window['go']['main']['App']['GetStartupEnabled']();
+}
+
+export function GetVersion() {
+  return window['go']['main']['App']['GetVersion']();
 }
 
 export function IsOVMSRunning() {

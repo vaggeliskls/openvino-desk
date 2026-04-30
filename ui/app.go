@@ -127,6 +127,47 @@ func (a *App) startup(ctx context.Context) {
 	}()
 }
 
+// UpdateInfo describes a newer GitHub release.
+type UpdateInfo struct {
+	Available    bool   `json:"available"`
+	Version      string `json:"version"`
+	URL          string `json:"url"`
+	ReleaseNotes string `json:"release_notes"`
+}
+
+// CheckForUpdate queries the GitHub releases API and returns info about a newer
+// version. Returns an empty UpdateInfo (Available=false) on any error or when
+// running in dev mode.
+func (a *App) CheckForUpdate() UpdateInfo {
+	if Version == "dev" {
+		return UpdateInfo{}
+	}
+	resp, err := http.Get("https://api.github.com/repos/turintech/openvino-desktop/releases/latest")
+	if err != nil {
+		return UpdateInfo{}
+	}
+	defer resp.Body.Close()
+	var release struct {
+		TagName string `json:"tag_name"`
+		HTMLURL string `json:"html_url"`
+		Body    string `json:"body"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return UpdateInfo{}
+	}
+	return UpdateInfo{
+		Available:    release.TagName != "" && release.TagName != Version,
+		Version:      release.TagName,
+		URL:          release.HTMLURL,
+		ReleaseNotes: release.Body,
+	}
+}
+
+// GetVersion returns the current application version.
+func (a *App) GetVersion() string {
+	return Version
+}
+
 // domReady is called after the frontend is mounted and ready to receive events.
 // Auto-starting OVMS here ensures its log output is visible in the UI.
 func (a *App) domReady() {
@@ -134,6 +175,11 @@ func (a *App) domReady() {
 	if _, err := os.Stat(marker); err == nil {
 		go a.StartOVMS() //nolint: errcheck
 	}
+	go func() {
+		if info := a.CheckForUpdate(); info.Available {
+			runtime.EventsEmit(a.ctx, "update-available", info)
+		}
+	}()
 }
 
 // shutdown stops OVMS and all child processes before the application exits.

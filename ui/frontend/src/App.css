@@ -118,6 +118,12 @@ body {
   color: #666;
 }
 
+.update-badge {
+  color: #e8a04a;
+  cursor: pointer;
+  border: none;
+}
+
 .status-dot {
   width: 6px;
   height: 6px;
