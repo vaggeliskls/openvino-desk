@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
@@ -55,75 +56,29 @@ type StatusResult struct {
 	OvmsReady bool `json:"ovms_ready"`
 }
 
-// ovmsVersionFromExe runs ovms.exe --version and returns a clean version string
-// trimOVMSVersion keeps the leading dot-separated all-numeric parts of a version
-// word, dropping any git hash suffix. e.g. "2026.1.0.72cc0624" → "2026.1.0".
-func trimOVMSVersion(word string) string {
-	var numParts []string
-	for _, p := range strings.Split(word, ".") {
-		allDigits := len(p) > 0
-		for _, c := range p {
-			if c < '0' || c > '9' {
-				allDigits = false
-				break
-			}
-		}
-		if !allDigits {
-			break
-		}
-		numParts = append(numParts, p)
-	}
-	if len(numParts) < 2 {
+// ovmsVersionFromURL extracts the version from the OVMS download URL filename.
+// e.g. "ovms_windows_2026.1.0_python_on.zip" → "2026.1.0"
+func ovmsVersionFromURL(rawURL string) string {
+	base := path.Base(rawURL)
+	const prefix = "ovms_windows_"
+	const suffix = "_python_on.zip"
+	if !strings.HasPrefix(base, prefix) || !strings.HasSuffix(base, suffix) {
 		return ""
 	}
-	return strings.Join(numParts, ".")
-}
-
-// ovmsVersionFromExe runs ovms.exe --version and returns a clean version string
-// e.g. "OpenVINO Model Server 2026.1.0.72cc0624" → "2026.1.0"
-func ovmsVersionFromExe(ovmsDir string) string {
-	ovmsExe := filepath.Join(ovmsDir, "ovms.exe")
-	if _, err := os.Stat(ovmsExe); err != nil {
-		return ""
-	}
-	cmd := exec.Command(ovmsExe, "--version")
-	cmd.Dir = ovmsDir
-	cmd.Env = buildOVMSEnv(ovmsDir)
-	hideWindow(cmd)
-	out, _ := cmd.CombinedOutput()
-	if len(out) == 0 {
-		return ""
-	}
-	firstLine := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
-	for _, word := range strings.Fields(firstLine) {
-		if len(word) == 0 || word[0] < '0' || word[0] > '9' {
-			continue
-		}
-		if v := trimOVMSVersion(word); v != "" {
-			return v
-		}
-	}
-	return ""
+	return strings.TrimSuffix(strings.TrimPrefix(base, prefix), suffix)
 }
 
 // App is the Wails application struct.
 type App struct {
-	ctx              context.Context
-	config           Config
-	ovmsProc         *exec.Cmd
-	ovmsMu           sync.Mutex
-	assets           embed.FS
-	ovmsVersionCache string
+	ctx      context.Context
+	config   Config
+	ovmsProc *exec.Cmd
+	ovmsMu   sync.Mutex
+	assets   embed.FS
 }
 
-// ovmsVersion returns the installed OVMS version, caching the result so the
-// ovms.exe --version subprocess only runs once per install.
 func (a *App) ovmsVersion() string {
-	if a.ovmsVersionCache != "" {
-		return a.ovmsVersionCache
-	}
-	a.ovmsVersionCache = ovmsVersionFromExe(filepath.Join(a.config.InstallDir, "ovms"))
-	return a.ovmsVersionCache
+	return ovmsVersionFromURL(a.config.OvmsURL)
 }
 
 func NewApp(assets embed.FS) *App {
@@ -821,7 +776,6 @@ func (a *App) UpdateOVMSToLatest(url string) error {
 		url = defaultOvmsURL
 	}
 	a.config.OvmsURL = url
-	a.ovmsVersionCache = ""
 	if err := a.SaveConfig(a.config); err != nil {
 		return err
 	}
@@ -829,7 +783,6 @@ func (a *App) UpdateOVMSToLatest(url string) error {
 }
 
 func (a *App) ResetOVMS() error {
-	a.ovmsVersionCache = ""
 	a.stopAndWait()
 	ovmsDirPath := filepath.Join(a.config.InstallDir, "ovms")
 	if _, err := os.Stat(ovmsDirPath); err == nil {
@@ -1002,7 +955,7 @@ type OVMSRuntimeStatus struct {
 }
 
 // GetOVMSRuntimeStatus reports OVMS readiness (via /v2/health/ready) and the
-// installed version (from ovms.exe --version, cached).
+// installed version (parsed from the configured OvmsURL).
 func (a *App) GetOVMSRuntimeStatus() OVMSRuntimeStatus {
 	out := OVMSRuntimeStatus{Version: a.ovmsVersion()}
 	url := fmt.Sprintf("http://localhost:%d/v2/health/ready", a.config.OVMSRestPort)
