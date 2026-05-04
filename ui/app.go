@@ -368,6 +368,9 @@ func (a *App) loadConfig() {
 	if a.config.OVMSRestPort == 0 {
 		a.config.OVMSRestPort = 8080
 	}
+	if a.config.LogLevel == "" {
+		a.config.LogLevel = "INFO"
+	}
 }
 
 // GetConfig returns the current configuration.
